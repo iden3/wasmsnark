@@ -1,0 +1,3 @@
+It's not necessary to multiply by 1/2^n in the ifft (Can be put in the points).
+The points can also be resorted so it's not necessary to permute.
+Expand memory of the threads dynamically.

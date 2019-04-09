@@ -1,0 +1,40 @@
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of websnark (Web Assembly zkSnark Prover).
+
+    websnark is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    websnark is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with websnark. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("big-integer");
+
+exports.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
+    const b = Array(len);
+    let v = bigInt(_a);
+    for (let i=0; i<len; i++) {
+        b[i] = v.and(0xFF).toJSNumber();
+        v = v.shiftRight(8);
+    }
+    return b;
+};
+
+exports.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
+    const b = Array(len);
+    let v = bigInt(_a);
+    for (let i=0; i<len; i++) {
+        b[i] = v.and(0xFFFFFFFF).toJSNumber();
+        v = v.shiftRight(32);
+    }
+    return b;
+};

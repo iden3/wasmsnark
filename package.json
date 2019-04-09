@@ -1,0 +1,39 @@
+{
+  "name": "websnark",
+  "version": "0.0.1",
+  "description": "big integer library to work in Zq",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha --experimental-worker",
+    "buildwasm": "node tools/buildwasm.js",
+    "build": "node tools/buildwasm.js; browserify main.js -o build/websnark.js --exclude worker_threads --exclude crypto; cp build/websnark.js example/websnark.js"
+  },
+  "keywords": [
+    "bigint",
+    "bignum",
+    "biginteger",
+    "zq",
+    "elliptic",
+    "curve",
+    "prime",
+    "field"
+  ],
+  "author": "Jordi Baylina",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iden3/websnark.git"
+  },
+  "devDependencies": {
+    "eslint": "^5.14.0",
+    "eslint-plugin-mocha": "^5.3.0",
+    "eslint-plugin-webassembly": "^1.8.4",
+    "mocha": "^6.1.2",
+    "package": "^1.0.1",
+    "snarkjs": "^0.1.12",
+    "wasmbuilder": "0.0.2"
+  },
+  "dependencies": {
+    "big-integer": "^1.6.42"
+  }
+}
