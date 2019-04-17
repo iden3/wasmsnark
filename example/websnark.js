@@ -1657,7 +1657,7 @@ function thread(self) {
 
             instance.exports.fft_ifft(pPolA2, domainSize*2, 0);
 
-            instance.exports.fft_fromMontgomeryN(pPolA2+domainSize*32, pPolA2+domainSize*32, nSignals);
+            instance.exports.fft_fromMontgomeryN(pPolA2+domainSize*32, pPolA2+domainSize*32, domainSize);
 
             data.result = getBin(pPolA2+domainSize*32, domainSize*32);
             i32[0] = oldAlloc;
@@ -1991,6 +1991,12 @@ class Groth16 {
 
 
         const pH = this.calcH(signals.slice(0), polsA, polsB, nSignals, domainSize).then( (h) => {
+/* Debug code to print the result of h
+            for (let i=0; i<domainSize; i++) {
+                const a = this.bin2int(h.slice(i*32, i*32+32));
+                console.log(i + " -> " + a.toString());
+            }
+*/
             return this.g1_multiexp(h, pointsHExps);
         });
 
@@ -2040,6 +2046,10 @@ class Groth16 {
             this.putBin(ps, bs);
         }
 
+/// Uncoment it to debug and check it works
+//        this.instance.exports.f1m_zero(pr);
+//        this.instance.exports.f1m_zero(ps);
+
         // pi_a = pi_a + Alfa1 + r*Delta1
         this.instance.exports.g1_add(pAlfa1, pi_a, pi_a);
         this.instance.exports.g1_timesScalar(pDelta1, pr, 32, aux1);
@@ -2059,6 +2069,7 @@ class Groth16 {
         // pi_c = pi_c + pH
         this.putBin(aux1, res[4]);
         this.instance.exports.g1_add(aux1, pi_c, pi_c);
+
 
         // pi_c = pi_c + s*pi_a
         this.instance.exports.g1_timesScalar(pi_a, ps, 32, aux1);
