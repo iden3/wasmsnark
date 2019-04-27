@@ -428,6 +428,7 @@ module.exports = function buildMultiexp(module, prefix, curvePrefix, pointFieldP
         f.addCode(c.getLocal("pr"));
     }
 
+
     function buildMulw() {
         const f = module.addFunction(prefix+"__mulw");
         f.addParam("pscalars", "i32");
@@ -578,6 +579,264 @@ module.exports = function buildMultiexp(module, prefix, curvePrefix, pointFieldP
         ));
     }
 
+
+    function buildMulw2() {
+        const f = module.addFunction(prefix+"__mulw2");
+        f.addParam("pscalars", "i32");
+        f.addParam("ppoints", "i32");
+        f.addParam("w", "i32");  // Window size Max 8
+        f.addParam("pr", "i32");
+        f.addLocal("i", "i32");
+        f.addLocal("pd", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const psels = module.alloc(scalarN8 * 8);
+
+        f.addCode(c.call(
+            prefix + "__packbits",
+            c.getLocal("pscalars"),
+            c.getLocal("w"),
+            c.i32_const(psels)
+        ));
+
+        f.addCode(c.call(
+            prefix + "__ptable_reset",
+            c.getLocal("ppoints"),
+            c.getLocal("w")
+        ));
+
+
+        f.addCode(c.setLocal("i", c.i32_const(0)));
+        f.addCode(c.block(c.loop(
+            c.br_if(
+                1,
+                c.i32_eq(
+                    c.getLocal("i"),
+                    c.i32_const(scalarN8 * 8)
+                )
+            ),
+
+            c.setLocal(
+                "pd",
+                c.i32_add(
+                    c.getLocal("pr"),
+                    c.i32_mul(
+                        c.getLocal("i"),
+                        c.i32_const(pointN8)
+                    )
+                )
+            ),
+
+            c.call(curvePrefix + "_add",
+                c.getLocal("pd"),
+                c.call(
+                    prefix + "__ptable_get",
+                    c.i32_load8_u(
+                        c.i32_sub(
+                            c.i32_const(psels + scalarN8 * 8 -1),
+                            c.getLocal("i")
+                        )
+                    )
+                ),
+                c.getLocal("pd")
+            ),
+
+            c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
+            c.br(0)
+        )));
+
+    }
+
+    function buildMultiexp2() {
+        const f = module.addFunction(prefix+"_multiexp2");
+        f.addParam("pscalars", "i32");
+        f.addParam("ppoints", "i32");
+        f.addParam("n", "i32");  // Number of points
+        f.addParam("w", "i32");  // Window size Max 8
+        f.addParam("pr", "i32");
+        f.addLocal("ps", "i32");
+        f.addLocal("pp", "i32");
+        f.addLocal("wf", "i32");
+        f.addLocal("lastps", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const accumulators = c.i32_const(module.alloc(pointN8*scalarN8*8));
+        const aux = c.i32_const(module.alloc(pointN8));
+
+        f.addCode(c.call(prefix + "__resetAccumulators", accumulators, c.i32_const(scalarN8*8)));
+
+        f.addCode(c.setLocal("ps", c.getLocal("pscalars")));
+        f.addCode(c.setLocal("pp", c.getLocal("ppoints")));
+
+        f.addCode(c.setLocal(
+            "lastps",
+            c.i32_add(
+                c.getLocal("ps"),
+                c.i32_mul(
+                    c.i32_mul(
+                        c.i32_div_u(
+                            c.getLocal("n"),
+                            c.getLocal("w")
+                        ),
+                        c.getLocal("w")
+                    ),
+                    c.i32_const(scalarN8)
+                )
+            )
+        ));
+
+        f.addCode(c.block(c.loop(
+            c.br_if(
+                1,
+                c.i32_eq(
+                    c.getLocal("ps"),
+                    c.getLocal("lastps")
+                )
+            ),
+
+            c.call(prefix + "__mulw2", c.getLocal("ps"), c.getLocal("pp"), c.getLocal("w"), accumulators),
+
+            c.setLocal(
+                "ps",
+                c.i32_add(
+                    c.getLocal("ps"),
+                    c.i32_mul(
+                        c.i32_const(scalarN8),
+                        c.getLocal("w")
+                    )
+                )
+            ),
+
+            c.setLocal(
+                "pp",
+                c.i32_add(
+                    c.getLocal("pp"),
+                    c.i32_mul(
+                        c.i32_const(pointFieldN8*2),
+                        c.getLocal("w")
+                    )
+                )
+            ),
+
+            c.br(0)
+        )));
+
+        f.addCode(c.setLocal("wf", c.i32_rem_u(c.getLocal("n"), c.getLocal("w"))));
+
+        f.addCode(c.if(
+            c.getLocal("wf"),
+            [
+                ...c.call(prefix + "__mulw2", c.getLocal("ps"), c.getLocal("pp"), c.getLocal("wf"), accumulators),
+            ]
+        ));
+
+        f.addCode(c.call(
+            prefix + "__addAccumulators",
+            accumulators,
+            c.i32_const(scalarN8*8),
+            aux
+        ));
+
+        f.addCode(c.call(curvePrefix + "_add", aux, c.getLocal("pr"), c.getLocal("pr")));
+
+    }
+
+    function buildResetAccumulators() {
+        const f = module.addFunction(prefix+"__resetAccumulators");
+        f.addParam("paccumulators", "i32");
+        f.addParam("n", "i32");  // Number of points
+        f.addLocal("i", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(c.setLocal("i", c.i32_const(0)));
+        f.addCode(c.block(c.loop(
+            c.br_if(
+                1,
+                c.i32_eq(
+                    c.getLocal("i"),
+                    c.getLocal("n")
+                )
+            ),
+
+            c.call(
+                curvePrefix + "_zero",
+                c.i32_add(
+                    c.getLocal("paccumulators"),
+                    c.i32_mul(
+                        c.getLocal("i"),
+                        c.i32_const(pointN8)
+                    )
+                )
+            ),
+
+            c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
+            c.br(0)
+
+        )));
+    }
+
+    function buildAddAccumulators() {
+        const f = module.addFunction(prefix+"__addAccumulators");
+        f.addParam("paccumulators", "i32");
+        f.addParam("n", "i32");  // Number of points
+        f.addParam("pr", "i32");
+        f.addLocal("i", "i32");
+        f.addLocal("p", "i32");
+
+        const c = f.getCodeBuilder();
+
+/*
+        f.addCode(c.setLocal(
+            "p",
+            c.i32_add(
+                c.getLocal("paccumulators"),
+                c.i32_sub(
+                    c.i32_mul(
+                        c.getLocal("n"),
+                        c.i32_const(pointN8)
+                    ),
+                    c.i32_const(pointN8)
+                )
+            )
+        ));
+*/
+        f.addCode(c.setLocal("p",c.getLocal("paccumulators")));
+
+        f.addCode(c.call(curvePrefix + "_copy", c.getLocal("p"), c.getLocal("pr")));
+        f.addCode(c.setLocal("p", c.i32_add(c.getLocal("p"), c.i32_const(pointN8))));
+
+        f.addCode(c.setLocal("i", c.i32_const(1)));
+        f.addCode(c.block(c.loop(
+            c.br_if(
+                1,
+                c.i32_eq(
+                    c.getLocal("i"),
+                    c.getLocal("n")
+                )
+            ),
+
+            c.call(
+                curvePrefix + "_double",
+                c.getLocal("pr"),
+                c.getLocal("pr")
+            ),
+
+            c.call(
+                curvePrefix + "_add",
+                c.getLocal("p"),
+                c.getLocal("pr"),
+                c.getLocal("pr")
+            ),
+
+            c.setLocal("p", c.i32_add(c.getLocal("p"), c.i32_const(pointN8))),
+            c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
+            c.br(0)
+        )));
+    }
+
     buildSetSet();
     buildSetIsSet();
     buildPTableReset();
@@ -585,7 +844,14 @@ module.exports = function buildMultiexp(module, prefix, curvePrefix, pointFieldP
     buildPackBits();
     buildMulw();
     buildMultiexp();
+
+    buildMulw2();
+    buildResetAccumulators();
+    buildAddAccumulators();
+    buildMultiexp2();
+
     module.exportFunction(prefix+"_multiexp");
+    module.exportFunction(prefix+"_multiexp2");
 
 
 };

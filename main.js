@@ -22,6 +22,7 @@
 const buildGroth16 = require("./src/groth16.js");
 
 buildGroth16().then( (groth16) => {
+    window.groth16 = groth16;
     window.genZKSnarkProof = function(witness, provingKey, cb) {
 
         const p = groth16.proof(witness, provingKey);

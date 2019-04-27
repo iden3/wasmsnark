@@ -101,7 +101,7 @@ function thread(self) {
             const pPoints = putBin(data.points);
             const pRes = alloc(96);
             instance.exports.g1_zero(pRes);
-            instance.exports.g1_multiexp(pScalars, pPoints, data.n, 5, pRes);
+            instance.exports.g1_multiexp2(pScalars, pPoints, data.n, 7, pRes);
 
             data.result = getBin(pRes, 96);
             i32[0] = oldAlloc;
@@ -113,7 +113,7 @@ function thread(self) {
             const pPoints = putBin(data.points);
             const pRes = alloc(192);
             instance.exports.g2_zero(pRes);
-            instance.exports.g2_multiexp(pScalars, pPoints, data.n, 5, pRes);
+            instance.exports.g2_multiexp(pScalars, pPoints, data.n, 7, pRes);
 
             data.result = getBin(pRes, 192);
             i32[0] = oldAlloc;

@@ -5,7 +5,7 @@
 <script>
 
 var witness;
-var proving_key;
+var provingKey;
 
 function onLoad() {
 
@@ -33,6 +33,42 @@ function calcProof() {
         document.getElementById("time").innerHTML = `Time to compute: ${time}ms`;
         document.getElementById("proof").innerHTML = JSON.stringify(p, null, 1);
     });
+}
+
+function test() {
+
+    const groth16 = window.groth16;
+    const nSignals = 1;
+
+    const pkey32 = new Uint32Array(provingKey);
+    const pPointsA = pkey32[5];
+
+    const points = provingKey.slice(pPointsA, pPointsA + nSignals*64);
+    const signals = witness.slice(0, nSignals*32);
+
+    const pr1 = groth16.alloc(96);
+    const pPoints = groth16.alloc(points.byteLength);
+    groth16.putBin(pPoints, points);
+
+    const pSignals = groth16.alloc(signals.byteLength);
+    groth16.putBin(pSignals, signals);
+
+    groth16.instance.exports.g1_zero(pr1);
+    groth16.instance.exports.g1_multiexp(pSignals, pPoints, nSignals, 1, pr1);
+    groth16.instance.exports.g1_affine(pr1, pr1);
+    groth16.instance.exports.g1_fromMontgomery(pr1, pr1);
+
+    const r1 = groth16.bin2g1(groth16.getBin(pr1, 96));
+
+    groth16.instance.exports.g1_zero(pr1);
+    groth16.instance.exports.g1_multiexp2(pSignals, pPoints, nSignals, 1, pr1);
+    groth16.instance.exports.g1_affine(pr1, pr1);
+    groth16.instance.exports.g1_fromMontgomery(pr1, pr1);
+
+    const r2 = groth16.bin2g1(groth16.getBin(pr1, 96));
+
+    console.log(r1);
+    console.log(r2);
 }
 
 </script>
