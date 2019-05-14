@@ -68,6 +68,10 @@ function thread(self) {
         while (i32[0] & 3) i32[0]++;  // Return always aligned pointers
         const res = i32[0];
         i32[0] += length;
+        while (i32[0] > memory.buffer.byteLength) {
+          memory.grow(100);
+        }
+        i32 = new Uint32Array(memory.buffer);
         return res;
     }
 
