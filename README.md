@@ -34,17 +34,17 @@ You can use the tool to build the binary file from the witness.json file generat
 ### IMPORTANT: Please be sure you run your setup with `--protocol groth`  websnark only generates groth16 proofs!
 
 ```
-node ../tools/buildwitness.js -i witness.json -o witness.bin
+node ../tools/buildwitness_cli.js -i witness.json -o witness.bin
 ```
 
 provingKey is the binary buffer with the binary representation of the proving key.
 
-Check the tool tools/buildpkey.js to convert a proving_key.json file generated
+Check the tool tools/buildpkey_cli.js to convert a proving_key.json file generated
 in [snarkjs](https://github.com/iden3/snarkjs) to a proving_key.bin file that can
 be used directly with this library.
 
 ```
-node ../tools/buildpkey.js -i proving_key.json -o proving_key.bin
+node ../tools/buildpkey_cli.js -i proving_key.json -o proving_key.bin
 ```
 
 The result is a JSON object with pi_a, pi_b and pi_c points.
