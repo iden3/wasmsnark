@@ -1572,6 +1572,10 @@ function thread(self) {
         while (i32[0] & 3) i32[0]++;  // Return always aligned pointers
         const res = i32[0];
         i32[0] += length;
+        while (i32[0] > memory.buffer.byteLength) {
+          memory.grow(100);
+        }
+        i32 = new Uint32Array(memory.buffer);
         return res;
     }
 
@@ -2099,6 +2103,7 @@ class Groth16 {
             pi_a: this.bin2g1(this.getBin(pi_a, 96)),
             pi_b: this.bin2g2(this.getBin(pi_b, 192)),
             pi_c: this.bin2g1(this.getBin(pi_c, 96)),
+            protocol: 'groth',
         };
 
     }
@@ -3378,7 +3383,6 @@ function fromByteArray (uint8) {
 }
 
 },{}],10:[function(require,module,exports){
-(function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -5157,8 +5161,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-}).call(this,require("buffer").Buffer)
-},{"base64-js":9,"buffer":10,"ieee754":11}],11:[function(require,module,exports){
+},{"base64-js":9,"ieee754":11}],11:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
