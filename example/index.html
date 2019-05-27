@@ -8,17 +8,21 @@ var witness;
 var provingKey;
 
 function onLoad() {
-
+    document.getElementById("calcProof").disabled = true;
     fetch("proving_key.bin").then( (response) => {
         return response.arrayBuffer();
     }).then( (b) => {
         provingKey = b;
-    });
-
-    fetch("witness.bin").then( (response) => {
-        return response.arrayBuffer();
-    }).then( (b) => {
-        witness = b;
+        console.log("proving key loaded");
+    }).then( () =>{ 
+        fetch("witness.bin").then( (response) => {
+          return response.arrayBuffer();
+        }).then( (b) => {
+          witness = b;
+        }).then ( () => {
+          console.log("witness loaded");
+          document.getElementById("calcProof").disabled = false;
+        });
     });
 }
 
@@ -75,7 +79,7 @@ function test() {
 <body onLoad="onLoad()">
 <h1>iden3</h1>
 <h2>Zero knowledge proof generator</h2>
-<button onClick="calcProof()">Test</button>
+<button id="calcProof" onClick="calcProof()">Test</button>
 <div id="time"></div>
 <pre id="proof"></pre>
 

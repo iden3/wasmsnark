@@ -599,6 +599,7 @@ class Groth16 {
             pi_a: this.bin2g1(this.getBin(pi_a, 96)),
             pi_b: this.bin2g2(this.getBin(pi_b, 192)),
             pi_c: this.bin2g1(this.getBin(pi_c, 96)),
+            protocol: 'groth',
         };
 
     }

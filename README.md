@@ -47,7 +47,7 @@ be used directly with this library.
 node ../tools/buildpkey.js -i proving_key.json -o proving_key.bin
 ```
 
-The result is a JSON object with pi_a, pi_b and pi_c points.
+The result is a JSON object with pi_a, pi_b, pi_c points and protocol groth field.
 
 You can use the stringified version of this JSON as a proof.json in [snarkjs](https://github.com/iden3/snarkjs)
 
@@ -62,20 +62,24 @@ Here is a simple example of a web page that loads a key and a witness and genera
 <script>
 
 var witness;
-var proving_key;
+var provingKey;
 
 function onLoad() {
-
+    document.getElementById("calcProof").disabled = true;
     fetch("proving_key.bin").then( (response) => {
         return response.arrayBuffer();
     }).then( (b) => {
         provingKey = b;
-    });
-
-    fetch("witness.bin").then( (response) => {
-        return response.arrayBuffer();
-    }).then( (b) => {
-        witness = b;
+        console.log("proving key loaded");
+    }).then( () =>{ 
+        fetch("witness.bin").then( (response) => {
+          return response.arrayBuffer();
+        }).then( (b) => {
+          witness = b;
+        }).then ( () => {
+          console.log("witness loaded");
+          document.getElementById("calcProof").disabled = false;
+        });
     });
 }
 
@@ -96,7 +100,7 @@ function calcProof() {
 <body onLoad="onLoad()">
 <h1>iden3</h1>
 <h2>Zero knowledge proof generator</h2>
-<button onClick="calcProof()">Test</button>
+<button id="calcProof" onClick="calcProof()">Test</button>
 <div id="time"></div>
 <pre id="proof"></pre>
 
