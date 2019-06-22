@@ -1,0 +1,1436 @@
+module.exports = function buildTomCook(module, _prefix) {
+
+    const prefix = _prefix || "tomcook";
+
+    function buildMul1() {
+
+        const f = module.addFunction(prefix+"_mul1");
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("m0", "i64");
+        f.addLocal("m1", "i64");
+        f.addLocal("m2", "i64");
+        f.addLocal("m02", "i64");
+
+        f.addLocal("p0", "i64");
+        f.addLocal("p1", "i64");
+        f.addLocal("pn1", "i64");
+        f.addLocal("pn2", "i64");
+        f.addLocal("pi", "i64");
+
+        f.addLocal("q0", "i64");
+        f.addLocal("q1", "i64");
+        f.addLocal("qn1", "i64");
+        f.addLocal("qn2", "i64");
+        f.addLocal("qi", "i64");
+
+        f.addLocal("r0", "i64");
+        f.addLocal("r1", "i64");
+        f.addLocal("rn1", "i64");
+        f.addLocal("rn2", "i64");
+        f.addLocal("ri", "i64");
+
+        f.addLocal("s0", "i64");
+        f.addLocal("s1", "i64");
+        f.addLocal("s2", "i64");
+        f.addLocal("s3", "i64");
+        f.addLocal("s4", "i64");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            // calculate p
+            c.setLocal("m0", c.i64_load32_u( c.getLocal("x"), 0)),
+            c.setLocal("m1", c.i64_load32_u( c.getLocal("x"), 4)),
+            c.setLocal("m2", c.i64_load32_u( c.getLocal("x"), 8)),
+
+            c.setLocal("m02", c.i64_add( c.getLocal("m0"), c.getLocal("m2"))),
+            c.setLocal("p0", c.getLocal("m0")),
+            c.setLocal("p1" , c.i64_add( c.getLocal("m02"),c.getLocal("m1"))),
+            c.setLocal("pn1", c.i64_sub( c.getLocal("m02"),c.getLocal("m1"))),
+            c.setLocal("pn2", c.i64_sub(
+                c.i64_shl(
+                    c.i64_add( c.getLocal("pn1"), c.getLocal("m2")),
+                    c.i64_const(1)
+                ),
+                c.getLocal("m0")
+            )),
+            c.setLocal("pi", c.getLocal("m2")),
+
+            // calculate q and intercalate r
+            c.setLocal("m0", c.i64_load32_u( c.getLocal("y"), 0)),
+            c.setLocal("m1", c.i64_load32_u( c.getLocal("y"), 4)),
+            c.setLocal("m2", c.i64_load32_u( c.getLocal("y"), 8)),
+
+            c.setLocal("m02", c.i64_add( c.getLocal("m0"), c.getLocal("m2"))),
+
+            c.setLocal("q0", c.getLocal("m0")),
+            c.setLocal("r0", c.i64_mul(c.getLocal("p0"), c.getLocal("q0"))),
+
+            c.setLocal("q1" , c.i64_add( c.getLocal("m02"),c.getLocal("m1"))),
+            c.setLocal("r1", c.i64_mul(c.getLocal("p1"), c.getLocal("q1"))),
+
+            c.setLocal("qn1", c.i64_sub( c.getLocal("m02"),c.getLocal("m1"))),
+            c.setLocal("rn1", c.i64_mul(c.getLocal("pn1"), c.getLocal("qn1"))),
+
+            c.setLocal("qn2", c.i64_sub(
+                c.i64_shl(
+                    c.i64_add( c.getLocal("qn1"), c.getLocal("m2") ),
+                    c.i64_const(1)
+                ),
+                c.getLocal("m0")
+            )),
+            c.setLocal("rn2", c.i64_mul(c.getLocal("pn2"), c.getLocal("qn2"))),
+
+            c.setLocal("qi", c.getLocal("m2")),
+            c.setLocal("ri", c.i64_mul(c.getLocal("pi"), c.getLocal("qi"))),
+
+            // Interpolation
+            c.setLocal("s0", c.getLocal("r0")),
+            c.setLocal("s4", c.getLocal("ri")),
+            c.setLocal("s3", c.i64_div_s(
+                c.i64_sub(
+                    c.getLocal("rn2"),
+                    c.getLocal("r1")
+                ),
+                c.i64_const(3)
+            )),
+            c.setLocal("s1", c.i64_shr_s(
+                c.i64_sub(
+                    c.getLocal("r1"),
+                    c.getLocal("rn1")
+                ),
+                c.i64_const(1)
+            )),
+            c.setLocal("s2", c.i64_sub(c.getLocal("rn1"), c.getLocal("r0"))),
+            c.setLocal("s3", c.i64_add(
+                c.i64_shr_s(
+                    c.i64_sub(
+                        c.getLocal("s2"),
+                        c.getLocal("s3")
+                    ),
+                    c.i64_const(1)
+                ),
+                c.i64_shl(
+                    c.getLocal("ri"),
+                    c.i64_const(1)
+                )
+            )),
+            c.setLocal("s2", c.i64_add(
+                c.i64_sub(
+                    c.getLocal("s2"),
+                    c.getLocal("s4")
+                ),
+                c.getLocal("s1"),
+            )),
+            c.setLocal("s1", c.i64_sub(
+                c.getLocal("s1"),
+                c.getLocal("s3")
+            )),
+
+            // Recomposition
+            c.setLocal("c", c.getLocal("s0")),
+            c.i64_store32(
+                c.getLocal("r"),
+                0,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c",
+                c.i64_add(
+                    c.i64_shr_u(
+                        c.getLocal("c"),
+                        c.i64_const(29)
+                    ),
+                    c.getLocal("s1")
+                )
+            ),
+            c.i64_store32(
+                c.getLocal("r"),
+                4,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c",
+                c.i64_add(
+                    c.i64_shr_u(
+                        c.getLocal("c"),
+                        c.i64_const(29)
+                    ),
+                    c.getLocal("s2")
+                )
+            ),
+            c.i64_store32(
+                c.getLocal("r"),
+                8,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c",
+                c.i64_add(
+                    c.i64_shr_u(
+                        c.getLocal("c"),
+                        c.i64_const(29)
+                    ),
+                    c.getLocal("s3")
+                )
+            ),
+            c.i64_store32(
+                c.getLocal("r"),
+                12,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c",
+                c.i64_add(
+                    c.i64_shr_u(
+                        c.getLocal("c"),
+                        c.i64_const(29)
+                    ),
+                    c.getLocal("s4")
+                )
+            ),
+            c.i64_store32(
+                c.getLocal("r"),
+                16,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c",
+                c.i64_shr_u(
+                    c.getLocal("c"),
+                    c.i64_const(29)
+                ),
+            ),
+            c.i64_store32(
+                c.getLocal("r"),
+                20,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            )
+        );
+    }
+
+    function buildMul(n) {
+
+        const f = module.addFunction(prefix+"_mul"+n);
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("s", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.if(
+                c.i32_and(
+                    c.i32_load( c.getLocal("x"), (n-1)*4 ),
+                    c.i32_const(0x80000000)
+                ),
+                c.if(
+                    c.i32_and(
+                        c.i32_load( c.getLocal("y"), (n-1)*4 ),
+                        c.i32_const(0x80000000)
+                    ),
+                    [
+                        ...c.call(prefix + "_mulnn" + n, c.getLocal("x"), c.getLocal("y"), c.getLocal("r")),
+                    ],
+                    [
+                        ...c.call(prefix + "_mulnp" + n, c.getLocal("x"), c.getLocal("y"), c.getLocal("r")),
+                    ]
+                ),
+                c.if(
+                    c.i32_and(
+                        c.i32_load( c.getLocal("y"), (n-1)*4 ),
+                        c.i32_const(0x80000000)
+                    ),
+                    [
+                        ...c.call(prefix + "_mulnp" + n, c.getLocal("y"), c.getLocal("x"), c.getLocal("r")),
+                    ],
+                    [
+                        ...c.call(prefix + "_mulu" + n, c.getLocal("x"), c.getLocal("y"), c.getLocal("r")),
+                    ]
+                ),
+            )
+        );
+    }
+
+    function buildMulU3() {
+        const f = module.addFunction(prefix+"_mulu3");
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("a0", "i64");
+        f.addLocal("a1", "i64");
+        f.addLocal("a2", "i64");
+        f.addLocal("b0", "i64");
+        f.addLocal("b1", "i64");
+        f.addLocal("b2", "i64");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            // calculate p
+            c.setLocal("a0", c.i64_load32_u( c.getLocal("x"), 0)),
+            c.setLocal("b0", c.i64_load32_u( c.getLocal("y"), 0)),
+
+            c.setLocal("c", c.i64_mul( c.getLocal("a0"), c.getLocal("b0") )),
+            c.i64_store32(
+                c.getLocal("r"),
+                0,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("a1", c.i64_load32_u( c.getLocal("x"), 4)),
+            c.setLocal("b1", c.i64_load32_u( c.getLocal("y"), 4)),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_shr_u( c.getLocal("c"), c.i64_const(29)),
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b1") ),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b0") )
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                4,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("a2", c.i64_load32_u( c.getLocal("x"), 8)),
+            c.setLocal("b2", c.i64_load32_u( c.getLocal("y"), 8)),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b2") ),
+                    c.i64_mul( c.getLocal("a2"), c.getLocal("b0") )
+                ),
+                c.i64_add(
+                    c.i64_shr_u( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b1") ),
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                8,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_shr_u( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b2"))
+                ),
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b1") ),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                12,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b2") ),
+                c.i64_shr_u( c.getLocal("c"), c.i64_const(29)),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                16,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.i64_store32(
+                c.getLocal("r"),
+                20,
+                c.i64_shr_u( c.getLocal("c"), c.i64_const(29)),
+            ),
+        );
+    }
+
+    function buildMulNP3() {
+        const f = module.addFunction(prefix+"_mulnp3");
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("a0", "i64");
+        f.addLocal("a1", "i64");
+        f.addLocal("a2", "i64");
+        f.addLocal("b0", "i64");
+        f.addLocal("b1", "i64");
+        f.addLocal("b2", "i64");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            // calculate p
+            c.setLocal("a0",
+                c.i64_add(
+                    c.i64_xor(
+                        c.i64_load32_u( c.getLocal("x"), 0),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(1)
+                )
+            ),
+            c.setLocal("b0", c.i64_load32_u( c.getLocal("y"), 0)),
+
+            c.setLocal("c", c.i64_sub(
+                c.i64_mul( c.getLocal("a0"), c.getLocal("b0") ),
+                c.i64_const(1)
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                0,
+                c.i64_xor(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("a1",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("x"), 4),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+            c.setLocal("b1", c.i64_load32_u( c.getLocal("y"), 4)),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b1") ),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b0") )
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                4,
+                c.i64_xor(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("a2",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("x"), 8),
+                    c.i64_const(0xFFFFFFFF)
+                )
+            ),
+            c.setLocal("b2", c.i64_load32_u( c.getLocal("y"), 8)),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b2") ),
+                    c.i64_mul( c.getLocal("a2"), c.getLocal("b0") )
+                ),
+                c.i64_add(
+                    c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b1") ),
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                8,
+                c.i64_xor(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b2"))
+                ),
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b1") ),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                12,
+                c.i64_xor(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b2") ),
+                c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                16,
+                c.i64_xor(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.i64_store32(
+                c.getLocal("r"),
+                20,
+                c.i64_xor(
+                    c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_const(0xFFFFFFFF)
+                )
+            )
+        );
+    }
+
+
+    function buildMulNN3() {
+        const f = module.addFunction(prefix+"_mulnn3");
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("a0", "i64");
+        f.addLocal("a1", "i64");
+        f.addLocal("a2", "i64");
+        f.addLocal("b0", "i64");
+        f.addLocal("b1", "i64");
+        f.addLocal("b2", "i64");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            // calculate p
+            c.setLocal("a0",
+                c.i64_add(
+                    c.i64_xor(
+                        c.i64_load32_u( c.getLocal("x"), 0),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(1)
+                )
+            ),
+            c.setLocal("b0",
+                c.i64_add(
+                    c.i64_xor(
+                        c.i64_load32_u( c.getLocal("y"), 0),
+                        c.i64_const(0x1FFFFFFF)
+                    ),
+                    c.i64_const(1)
+                )
+            ),
+
+            c.setLocal("c", c.i64_mul( c.getLocal("a0"), c.getLocal("b0") )),
+            c.i64_store32(
+                c.getLocal("r"),
+                0,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                ),
+            ),
+
+            c.setLocal("a1",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("x"), 4),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+            c.setLocal("b1",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("y"), 4),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b1") ),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b0") )
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                4,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                ),
+            ),
+
+            c.setLocal("a2",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("x"), 8),
+                    c.i64_const(0xFFFFFFFF)
+                )
+            ),
+            c.setLocal("b2",
+                c.i64_xor(
+                    c.i64_load32_u( c.getLocal("y"), 8),
+                    c.i64_const(0xFFFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_mul( c.getLocal("a0"), c.getLocal("b2") ),
+                    c.i64_mul( c.getLocal("a2"), c.getLocal("b0") )
+                ),
+                c.i64_add(
+                    c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b1") ),
+                )
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                8,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_add(
+                    c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+                    c.i64_mul( c.getLocal("a1"), c.getLocal("b2"))
+                ),
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b1") ),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                12,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                )
+            ),
+
+            c.setLocal("c", c.i64_add(
+                c.i64_mul( c.getLocal("a2"), c.getLocal("b2") ),
+                c.i64_shr_s( c.getLocal("c"), c.i64_const(29)),
+            )),
+            c.i64_store32(
+                c.getLocal("r"),
+                16,
+                c.i64_and(
+                    c.getLocal("c"),
+                    c.i64_const(0x1FFFFFFF)
+                ),
+                c.i64_const(0x1FFFFFFF)
+            ),
+
+            c.i64_store32(
+                c.getLocal("r"),
+                20,
+                c.i64_shr_s( c.getLocal("c"), c.i64_const(29))
+            )
+        );
+    }
+
+    function buildNeg(n) {
+        const f = module.addFunction(prefix+"_neg"+n);
+        f.addParam("x", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        for (let i=0; i<n-1; i++) {
+            f.addCode(
+                c.setLocal(
+                    "c",
+                    c.i64_add(
+                        (i==0)
+                            ? c.i64_const(1)
+                            : c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                        c.i64_xor(
+                            c.i64_load32_u( c.getLocal("x"), i*4),
+                            c.i64_const(0x1FFFFFFF)
+                        )
+                    )
+                )
+            );
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+
+        f.addCode(
+            c.setLocal(
+                "c",
+                c.i64_add(
+                    c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                    c.i64_xor(
+                        c.i64_load32_u( c.getLocal("x"), (n-1)*4),
+                        c.i64_const(0xFFFFFFFF)
+                    )                )
+            )
+        );
+
+        f.addCode(
+            c.i64_store32(
+                c.getLocal("r"),
+                (n-1)*4,
+                c.getLocal("c")
+            )
+        );
+    }
+
+
+    function buildAddOne(n) {
+        const f = module.addFunction(prefix+"_addOne"+n);
+        f.addParam("x", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        for (let i=0; i<n; i++) {
+            f.addCode(
+                c.setLocal(
+                    "c",
+                    c.i64_add(
+                        c.i64_const(1),
+                        c.i64_load32_u( c.getLocal("x"), i*4),
+                    )
+                )
+            );
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("x"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const((i == n-1) ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+
+            if (i<n-1) {
+                f.addCode(
+                    c.if(
+                        c.i64_eqz(
+                            c.i64_and(
+                                c.getLocal("c"),
+                                c.i64_const("0x20000000")
+                            )
+                        ),
+                        c.ret([])
+                    )
+                );
+            }
+        }
+
+    }
+
+    function buildAdd(n) {
+        const f = module.addFunction(prefix+"_add"+n);
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        for (let i=0; i<n; i++) {
+
+            if ( i==0) {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_add(
+                            c.i64_load32_s( c.getLocal("x"), i*4),
+                            c.i64_load32_s( c.getLocal("y"), i*4),
+                        )
+                    )
+                );
+            } else {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_add(
+                            c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                            c.i64_add(
+                                c.i64_load32_s( c.getLocal("x"), i*4),
+                                c.i64_load32_s( c.getLocal("y"), i*4),
+                            )
+                        )
+                    )
+                );
+            }
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(i==n-1 ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+    }
+
+
+    function buildSub(n) {
+        const f = module.addFunction(prefix+"_sub"+n);
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(c.setLocal("c", c.i64_const(1 << 29)));
+
+        for (let i=0; i<n; i++) {
+            f.addCode(
+                c.setLocal(
+                    "c",
+                    c.i64_add(
+                        c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                        c.i64_add(
+                            c.i64_load32_s( c.getLocal("x"), i*4),
+                            c.i64_xor(
+                                c.i64_load32_s( c.getLocal("y"), i*4),
+                                c.i64_const(i==n-1 ? 0xFFFFFFFF : 0x1FFFFFFF)
+                            )
+                        )
+                    )
+                )
+            );
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(i==n-1 ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+    }
+
+
+    function buildDouble(n) {
+
+        const f = module.addFunction(prefix+"_double"+n);
+        f.addParam("x", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+        for (let i=0; i<n; i++) {
+
+            if ( i==0) {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_shl(
+                            c.i64_load32_s( c.getLocal("x"), i*4),
+                            c.i64_const(1)
+                        )
+                    )
+                );
+            } else {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_add(
+                            c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                            c.i64_shl(
+                                c.i64_load32_s( c.getLocal("x"), i*4),
+                                c.i64_const(1)
+                            )
+                        )
+                    )
+                );
+            }
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(i==n-1 ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+    }
+
+    function buildHalve(n) {
+        const f = module.addFunction(prefix+"_halve"+n);
+        f.addParam("x", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+        f.addLocal("sign", "i64");
+
+        const c = f.getCodeBuilder();
+
+        for (let i=n-1; i>=0; i--) {
+
+            if ( i==n-1) {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_load32_s( c.getLocal("x"), i*4)
+                    ),
+                    c.setLocal(
+                        "sign",
+                        c.i64_shr_u(
+                            c.getLocal("c"),
+                            c.i64_const(63)
+                        )
+                    )
+                );
+            } else {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_or(
+                            c.i64_shl(c.getLocal("c"), c.i64_const(29)),
+                            c.i64_load32_u( c.getLocal("x"), i*4),
+                        )
+                    )
+                );
+            }
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.i64_shr_s(
+                            c.getLocal("c"),
+                            c.i64_const(1)
+                        ),
+                        c.i64_const((i==n-1) ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+        f.addCode(
+            c.if(
+                c.i32_wrap_i64(
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.getLocal("sign")
+                    )
+                ),
+                c.call(prefix + "_addOne" + n , c.getLocal("r"))
+            )
+        );
+
+    }
+
+
+    function buildDivShort(n) {
+        buildDivShortRaw(n, "pp");
+        buildDivShortRaw(n, "pn");
+        buildDivShortRaw(n, "np");
+        buildDivShortRaw(n, "nn");
+
+        let c;
+        const fxp = module.addFunction(prefix+"_divshortxp"+n);
+        c = fxp.getCodeBuilder();
+        fxp.addParam("x", "i32");
+        fxp.addParam("s", "i32");
+        fxp.addParam("r", "i32");
+        fxp.addCode(
+            c.if(
+                c.i32_and(
+                    c.i32_load( c.getLocal("x"), (n-1)*4 ),
+                    c.i32_const(0x80000000)
+                ),
+                [
+                    ...c.call(prefix + "_divshortnp" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ],
+                [
+                    ...c.call(prefix + "_divshortpp" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ]
+            ),
+        );
+
+        const fxn = module.addFunction(prefix+"_divshortxn"+n);
+        c = fxn.getCodeBuilder();
+        fxn.addParam("x", "i32");
+        fxn.addParam("s", "i32");
+        fxn.addParam("r", "i32");
+        fxn.addCode(
+            c.if(
+                c.i32_and(
+                    c.i32_load( c.getLocal("x"), (n-1)*4 ),
+                    c.i32_const(0x80000000)
+                ),
+                [
+                    ...c.call(prefix + "_divshortnn" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ],
+                [
+                    ...c.call(prefix + "_divshortpn" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ]
+            ),
+        );
+
+        const f = module.addFunction(prefix+"_divshort"+n);
+        c = f.getCodeBuilder();
+        f.addParam("x", "i32");
+        f.addParam("s", "i32");
+        f.addParam("r", "i32");
+        f.addCode(
+            c.if(
+                c.i32_lt_s(
+                    c.getLocal("s"),
+                    c.i32_const(0)
+                ),
+                [
+                    ...c.call(prefix + "_divshortxn" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ],
+                [
+                    ...c.call(prefix + "_divshortxp" + n, c.getLocal("x"), c.getLocal("s"), c.getLocal("r")),
+                ]
+            ),
+        );
+
+        // signs = "pp", "np", "pn", "nn"
+        function buildDivShortRaw(n, signs) {
+            const f = module.addFunction(prefix+"_divshort"+signs+n);
+            f.addParam("x", "i32");
+            f.addParam("s32", "i32");
+            f.addParam("r", "i32");
+
+            f.addLocal("c", "i64");
+            f.addLocal("s", "i64");
+
+            const c = f.getCodeBuilder();
+
+            if (signs[1] == "n") {
+                f.addCode(c.setLocal("s", c.i64_sub(c.i64_const(0), c.getLocal("s"))));
+            }
+
+            f.addCode(
+                c.setLocal("s", c.i64_extend_i32_u(c.getLocal("s32"))),
+                c.setLocal(
+                    "c",
+                    signs[0] == "p"
+                        ? c.i64_load32_u( c.getLocal("x"), (n-1)*4)
+                        : c.i64_xor(
+                            c.i64_load32_u( c.getLocal("x"), (n-1)*4),
+                            c.i64_const(0xFFFFFFFF)
+                        )
+                ),
+                c.i64_store32(
+                    c.getLocal("r"),
+                    (n-1)*4,
+                    (signs == "pp") || (signs == "nn")
+                        ? c.i64_div_u(
+                            c.getLocal("c"),
+                            c.getLocal("s")
+                        )
+                        : c.i64_xor(
+                            c.i64_div_u(
+                                c.getLocal("c"),
+                                c.getLocal("s")
+                            ),
+                            c.i64_const(0xFFFFFFFF)
+                        )
+                )
+            );
+
+            for (let i=n-2; i>=0; i--) {
+
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_or(
+                            c.i64_shl(
+                                c.i64_rem_u(
+                                    c.getLocal("c"),
+                                    c.getLocal("s")
+                                ),
+                                c.i64_const(29)
+                            ),
+
+                            signs[0] == "p"
+                                ? c.i64_load32_u( c.getLocal("x"), i*4)
+                                : c.i64_xor(
+                                    c.i64_load32_u( c.getLocal("x"), i*4),
+                                    c.i64_const(0x1FFFFFFF)
+                                )
+                        )
+                    )
+                );
+
+                if ((i==0) &&  (signs[0] == "n")) {
+                    f.addCode(
+                        c.setLocal(
+                            "c",
+                            c.i64_add(
+                                c.getLocal("c"),
+                                c.i64_const(1)
+                            )
+                        )
+                    );
+                }
+
+
+                f.addCode(
+                    c.i64_store32(
+                        c.getLocal("r"),
+                        i*4,
+
+                        (signs == "pp") || (signs == "nn")
+                            ? c.i64_div_u(
+                                c.getLocal("c"),
+                                c.getLocal("s")
+                            )
+                            : c.i64_xor(
+                                c.i64_div_u(
+                                    c.getLocal("c"),
+                                    c.getLocal("s")
+                                ),
+                                c.i64_const(0x1FFFFFFF)
+                            )
+                    )
+                );
+            }
+
+            if ((signs == "pn") || (signs == "np")) {
+                f.addCode(
+                    c.call(prefix + "_addOne" + n , c.getLocal("r"))
+                );
+            }
+        }
+    }
+
+
+    function buildRecompose(n) {
+
+        const sn = n/3;
+        const f = module.addFunction(prefix+"_recompose"+n);
+        f.addParam("s", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("c", "i64");
+
+        const c = f.getCodeBuilder();
+
+/*
+        0     sn        sn*2   sn*3   sn*4   sn*5
+        0     sn
+              sn*2      sn*3
+                        sn*4   sn*5
+                               sn+6   sn*7
+                                      sn*8   sn*9
+
+
+        b= Math.floor(i/sn)
+
+        b*2*sn  + (i-b*sn)
+        b*2*sn  + (i-b*sn) - sn
+*/
+
+        for (let i=0; i<sn; i++) {
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_load32_s( c.getLocal("s"), i*4),
+                )
+            );
+        }
+
+
+        for (let i=sn; i<sn*5; i++) {
+
+            const b= Math.floor(i/sn);
+            const i1 = b*2*sn  + (i-b*sn);
+            const i2 = i1 - sn;
+
+            if ( i==sn) {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_add(
+                            c.i64_load32_s( c.getLocal("s"), i1*4),
+                            c.i64_load32_s( c.getLocal("s"), i2*4),
+                        )
+                    )
+                );
+            } else {
+                f.addCode(
+                    c.setLocal(
+                        "c",
+                        c.i64_add(
+                            c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                            c.i64_add(
+                                c.i64_load32_s( c.getLocal("s"), i1*4),
+                                c.i64_load32_s( c.getLocal("s"), i2*4),
+                            )
+                        )
+                    )
+                );
+            }
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+
+
+        for (let i=sn*5; i<n; i++) {
+
+            const b= Math.floor(i/sn);
+            const i1 = b*2*sn  + (i-b*sn);
+            const i2 = i1 - sn;
+
+            f.addCode(
+                c.setLocal(
+                    "c",
+                    c.i64_add(
+                        c.i64_shr_u(c.getLocal("c"), c.i64_const(29)),
+                        c.i64_load32_s( c.getLocal("s"), i2*4)
+                    )
+                )
+            );
+
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    i*4,
+                    c.i64_and(
+                        c.getLocal("c"),
+                        c.i64_const(i==n-1 ? 0xFFFFFFFF : 0x1FFFFFFF)
+                    )
+                )
+            );
+        }
+    }
+
+    function buildMulU(n) {
+
+        const sn = n/3;
+        const sn2 = sn*2;
+
+
+        const f = module.addFunction(prefix+"_mulu"+n);
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+
+        f.addLocal("m1", "i32");
+        f.addLocal("m2", "i32");
+
+        f.addLocal("n1", "i32");
+        f.addLocal("n2", "i32");
+
+
+        const c = f.getCodeBuilder();
+
+        const m0 = c.getLocal("x");
+        f.addCode(c.setLocal("m1", c.i32_add( c.getLocal("x"), c.i32_const(sn*4) )));
+        const m1 = c.getLocal("m1");
+        f.addCode(c.setLocal("m2", c.i32_add( c.getLocal("x"), c.i32_const((sn*2)*4 ))));
+        const m2 = c.getLocal("m2");
+
+        const n0 = c.getLocal("y");
+        f.addCode(c.setLocal("n1", c.i32_add( c.getLocal("y"), c.i32_const(sn*4) )));
+        const n1 = c.getLocal("n1");
+        f.addCode(c.setLocal("n2", c.i32_add( c.getLocal("y"), c.i32_const((sn*2)*4 ))));
+        const n2 = c.getLocal("n2");
+
+        const po = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_add" + sn, m0, m2, po));
+        const p0 = m0;
+        const p1 = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_add" + sn, po, m1, p1));
+        const pn1 = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_sub" + sn, po, m1, pn1));
+        const pn2 = c.i32_const(module.alloc(sn*4));
+        f.addCode(
+            c.call(prefix + "_add" + sn, pn1, m2, pn2),
+            c.call(prefix + "_double" + sn, pn2, pn2),
+            c.call(prefix + "_sub" + sn, pn2, m0, pn2)
+        );
+        const pi = m2;
+
+        const qo = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_add" + sn, n0, n2, qo));
+        const q0 = n0;
+        const q1 = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_add" + sn, qo, n1, q1));
+        const qn1 = c.i32_const(module.alloc(sn*4));
+        f.addCode(c.call(prefix + "_sub" + sn, qo, n1, qn1));
+        const qn2 = c.i32_const(module.alloc(sn*4));
+        f.addCode(
+            c.call(prefix + "_add" + sn, qn1, n2, qn2),
+            c.call(prefix + "_double" + sn, qn2, qn2),
+            c.call(prefix + "_sub" + sn, qn2, n0, qn2)
+        );
+        const qi = n2;
+
+        const ps0 = module.alloc(sn*2*5*4);
+        const s0 = c.i32_const(ps0);
+        const s1 = c.i32_const(ps0 + (2*sn)*4);
+        const s2 = c.i32_const(ps0 + (4*sn)*4);
+        const s3 = c.i32_const(ps0 + (6*sn)*4);
+        const s4 = c.i32_const(ps0 + (8*sn)*4);
+
+        const r0 = s0;
+        const r1 = c.i32_const(module.alloc(sn*2*4));
+        const rn1 = c.i32_const(module.alloc(sn*2*4));
+        const rn2 = c.i32_const(module.alloc(sn*2*4));
+        const ri = s4;
+
+        f.addCode(c.call(prefix + "_mulu" + sn, p0, q0, r0));
+        f.addCode(c.call(prefix + "_mulu" + sn, p1, q1, r1));
+        f.addCode(c.call(prefix + "_mul"  + sn, pn1, qn1, rn1));
+        f.addCode(c.call(prefix + "_mul"  + sn, pn2, qn2, rn2));
+        f.addCode(c.call(prefix + "_mulu" + sn, pi, qi, ri));
+
+        const aux = c.i32_const(module.alloc(sn*4));
+
+        f.addCode(
+
+            // s3 = (r(-2) - r(1))/3
+            c.call(prefix + "_sub" + sn2, rn2, r1, s3),
+            c.call(prefix + "_divshort" + sn2, s3, c.i32_const(3), s3),
+
+            // s1 = (r(1) - r(-1))/2
+            c.call(prefix + "_sub" + sn2, r1, rn1, s1),
+            c.call(prefix + "_halve" + sn2, s1, s1),
+
+            // s2 = r(-1) - r(0)
+            c.call(prefix + "_sub" + sn2, rn1, r0, s2),
+
+            // s3 = (s2-s3)/2 + r(inf)*2
+            c.call(prefix + "_sub" + sn2, s2, s3, s3),
+            c.call(prefix + "_halve" + sn2, s3, s3),
+            c.call(prefix + "_double" + sn2, ri, aux),
+            c.call(prefix + "_add" + sn2, s3, aux, s3),
+
+            // s2 = s2 + s1 - s4
+            c.call(prefix + "_add" + sn2, s2, s1, s2),
+            c.call(prefix + "_sub" + sn2, s2, s4, s2),
+
+            // s1 = s1 - s3
+            c.call(prefix + "_sub" + sn2, s1, s3, s1),
+        );
+
+        f.addCode(c.call(prefix + "_recompose" + n, s0, c.getLocal("r")));
+
+    }
+
+
+    buildAddOne(6);
+    buildDivShort(6);
+
+    buildMul1();
+    buildMulU3();
+    buildMulNP3();
+    buildMulNN3();
+    buildNeg(3);
+    buildMul(3);
+    buildNeg(6);
+    buildAdd(3);
+    buildAdd(6);
+    buildSub(3);
+    buildSub(6);
+    buildDouble(3);
+    buildDouble(6);
+    buildHalve(6);
+    buildRecompose(9);
+    buildMulU(9);
+    module.exportFunction(prefix+"_mul1");
+    module.exportFunction(prefix+"_mulu3");
+    module.exportFunction(prefix+"_divshort6");
+    module.exportFunction(prefix+"_double6");
+    module.exportFunction(prefix+"_halve6");
+    module.exportFunction(prefix+"_mul3");
+    module.exportFunction(prefix+"_neg3");
+    module.exportFunction(prefix+"_neg6");
+    module.exportFunction(prefix+"_mulu9");
+};

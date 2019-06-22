@@ -6,7 +6,7 @@
             exports.pr = 1768;
         
 }).call(this,require("buffer").Buffer)
-},{"buffer":10}],2:[function(require,module,exports){
+},{"buffer":9}],2:[function(require,module,exports){
 /*
     Copyright 2019 0KIMS association.
 
@@ -50,7 +50,1292 @@ buildGroth16().then( (groth16) => {
 
 
 
-},{"./src/groth16.js":4}],3:[function(require,module,exports){
+},{"./src/groth16.js":13}],3:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var objectAssign = require('object-assign');
+
+// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
+// original notice:
+
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+function compare(a, b) {
+  if (a === b) {
+    return 0;
+  }
+
+  var x = a.length;
+  var y = b.length;
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i];
+      y = b[i];
+      break;
+    }
+  }
+
+  if (x < y) {
+    return -1;
+  }
+  if (y < x) {
+    return 1;
+  }
+  return 0;
+}
+function isBuffer(b) {
+  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
+    return global.Buffer.isBuffer(b);
+  }
+  return !!(b != null && b._isBuffer);
+}
+
+// based on node assert, original notice:
+// NB: The URL to the CommonJS spec is kept just for tradition.
+//     node-assert has evolved a lot since then, both in API and behavior.
+
+// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
+//
+// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
+//
+// Originally from narwhal.js (http://narwhaljs.org)
+// Copyright (c) 2009 Thomas Robinson <280north.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the 'Software'), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var util = require('util/');
+var hasOwn = Object.prototype.hasOwnProperty;
+var pSlice = Array.prototype.slice;
+var functionsHaveNames = (function () {
+  return function foo() {}.name === 'foo';
+}());
+function pToString (obj) {
+  return Object.prototype.toString.call(obj);
+}
+function isView(arrbuf) {
+  if (isBuffer(arrbuf)) {
+    return false;
+  }
+  if (typeof global.ArrayBuffer !== 'function') {
+    return false;
+  }
+  if (typeof ArrayBuffer.isView === 'function') {
+    return ArrayBuffer.isView(arrbuf);
+  }
+  if (!arrbuf) {
+    return false;
+  }
+  if (arrbuf instanceof DataView) {
+    return true;
+  }
+  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
+    return true;
+  }
+  return false;
+}
+// 1. The assert module provides functions that throw
+// AssertionError's when particular conditions are not met. The
+// assert module must conform to the following interface.
+
+var assert = module.exports = ok;
+
+// 2. The AssertionError is defined in assert.
+// new assert.AssertionError({ message: message,
+//                             actual: actual,
+//                             expected: expected })
+
+var regex = /\s*function\s+([^\(\s]*)\s*/;
+// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
+function getName(func) {
+  if (!util.isFunction(func)) {
+    return;
+  }
+  if (functionsHaveNames) {
+    return func.name;
+  }
+  var str = func.toString();
+  var match = str.match(regex);
+  return match && match[1];
+}
+assert.AssertionError = function AssertionError(options) {
+  this.name = 'AssertionError';
+  this.actual = options.actual;
+  this.expected = options.expected;
+  this.operator = options.operator;
+  if (options.message) {
+    this.message = options.message;
+    this.generatedMessage = false;
+  } else {
+    this.message = getMessage(this);
+    this.generatedMessage = true;
+  }
+  var stackStartFunction = options.stackStartFunction || fail;
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, stackStartFunction);
+  } else {
+    // non v8 browsers so we can have a stacktrace
+    var err = new Error();
+    if (err.stack) {
+      var out = err.stack;
+
+      // try to strip useless frames
+      var fn_name = getName(stackStartFunction);
+      var idx = out.indexOf('\n' + fn_name);
+      if (idx >= 0) {
+        // once we have located the function frame
+        // we need to strip out everything before it (and its line)
+        var next_line = out.indexOf('\n', idx + 1);
+        out = out.substring(next_line + 1);
+      }
+
+      this.stack = out;
+    }
+  }
+};
+
+// assert.AssertionError instanceof Error
+util.inherits(assert.AssertionError, Error);
+
+function truncate(s, n) {
+  if (typeof s === 'string') {
+    return s.length < n ? s : s.slice(0, n);
+  } else {
+    return s;
+  }
+}
+function inspect(something) {
+  if (functionsHaveNames || !util.isFunction(something)) {
+    return util.inspect(something);
+  }
+  var rawname = getName(something);
+  var name = rawname ? ': ' + rawname : '';
+  return '[Function' +  name + ']';
+}
+function getMessage(self) {
+  return truncate(inspect(self.actual), 128) + ' ' +
+         self.operator + ' ' +
+         truncate(inspect(self.expected), 128);
+}
+
+// At present only the three keys mentioned above are used and
+// understood by the spec. Implementations or sub modules can pass
+// other keys to the AssertionError's constructor - they will be
+// ignored.
+
+// 3. All of the following functions must throw an AssertionError
+// when a corresponding condition is not met, with a message that
+// may be undefined if not provided.  All assertion methods provide
+// both the actual and expected values to the assertion error for
+// display purposes.
+
+function fail(actual, expected, message, operator, stackStartFunction) {
+  throw new assert.AssertionError({
+    message: message,
+    actual: actual,
+    expected: expected,
+    operator: operator,
+    stackStartFunction: stackStartFunction
+  });
+}
+
+// EXTENSION! allows for well behaved errors defined elsewhere.
+assert.fail = fail;
+
+// 4. Pure assertion tests whether a value is truthy, as determined
+// by !!guard.
+// assert.ok(guard, message_opt);
+// This statement is equivalent to assert.equal(true, !!guard,
+// message_opt);. To test strictly for the value true, use
+// assert.strictEqual(true, guard, message_opt);.
+
+function ok(value, message) {
+  if (!value) fail(value, true, message, '==', assert.ok);
+}
+assert.ok = ok;
+
+// 5. The equality assertion tests shallow, coercive equality with
+// ==.
+// assert.equal(actual, expected, message_opt);
+
+assert.equal = function equal(actual, expected, message) {
+  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
+};
+
+// 6. The non-equality assertion tests for whether two objects are not equal
+// with != assert.notEqual(actual, expected, message_opt);
+
+assert.notEqual = function notEqual(actual, expected, message) {
+  if (actual == expected) {
+    fail(actual, expected, message, '!=', assert.notEqual);
+  }
+};
+
+// 7. The equivalence assertion tests a deep equality relation.
+// assert.deepEqual(actual, expected, message_opt);
+
+assert.deepEqual = function deepEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
+  }
+};
+
+assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
+  }
+};
+
+function _deepEqual(actual, expected, strict, memos) {
+  // 7.1. All identical values are equivalent, as determined by ===.
+  if (actual === expected) {
+    return true;
+  } else if (isBuffer(actual) && isBuffer(expected)) {
+    return compare(actual, expected) === 0;
+
+  // 7.2. If the expected value is a Date object, the actual value is
+  // equivalent if it is also a Date object that refers to the same time.
+  } else if (util.isDate(actual) && util.isDate(expected)) {
+    return actual.getTime() === expected.getTime();
+
+  // 7.3 If the expected value is a RegExp object, the actual value is
+  // equivalent if it is also a RegExp object with the same source and
+  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
+  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
+    return actual.source === expected.source &&
+           actual.global === expected.global &&
+           actual.multiline === expected.multiline &&
+           actual.lastIndex === expected.lastIndex &&
+           actual.ignoreCase === expected.ignoreCase;
+
+  // 7.4. Other pairs that do not both pass typeof value == 'object',
+  // equivalence is determined by ==.
+  } else if ((actual === null || typeof actual !== 'object') &&
+             (expected === null || typeof expected !== 'object')) {
+    return strict ? actual === expected : actual == expected;
+
+  // If both values are instances of typed arrays, wrap their underlying
+  // ArrayBuffers in a Buffer each to increase performance
+  // This optimization requires the arrays to have the same type as checked by
+  // Object.prototype.toString (aka pToString). Never perform binary
+  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
+  // bit patterns are not identical.
+  } else if (isView(actual) && isView(expected) &&
+             pToString(actual) === pToString(expected) &&
+             !(actual instanceof Float32Array ||
+               actual instanceof Float64Array)) {
+    return compare(new Uint8Array(actual.buffer),
+                   new Uint8Array(expected.buffer)) === 0;
+
+  // 7.5 For all other Object pairs, including Array objects, equivalence is
+  // determined by having the same number of owned properties (as verified
+  // with Object.prototype.hasOwnProperty.call), the same set of keys
+  // (although not necessarily the same order), equivalent values for every
+  // corresponding key, and an identical 'prototype' property. Note: this
+  // accounts for both named and indexed properties on Arrays.
+  } else if (isBuffer(actual) !== isBuffer(expected)) {
+    return false;
+  } else {
+    memos = memos || {actual: [], expected: []};
+
+    var actualIndex = memos.actual.indexOf(actual);
+    if (actualIndex !== -1) {
+      if (actualIndex === memos.expected.indexOf(expected)) {
+        return true;
+      }
+    }
+
+    memos.actual.push(actual);
+    memos.expected.push(expected);
+
+    return objEquiv(actual, expected, strict, memos);
+  }
+}
+
+function isArguments(object) {
+  return Object.prototype.toString.call(object) == '[object Arguments]';
+}
+
+function objEquiv(a, b, strict, actualVisitedObjects) {
+  if (a === null || a === undefined || b === null || b === undefined)
+    return false;
+  // if one is a primitive, the other must be same
+  if (util.isPrimitive(a) || util.isPrimitive(b))
+    return a === b;
+  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
+    return false;
+  var aIsArgs = isArguments(a);
+  var bIsArgs = isArguments(b);
+  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
+    return false;
+  if (aIsArgs) {
+    a = pSlice.call(a);
+    b = pSlice.call(b);
+    return _deepEqual(a, b, strict);
+  }
+  var ka = objectKeys(a);
+  var kb = objectKeys(b);
+  var key, i;
+  // having the same number of owned properties (keys incorporates
+  // hasOwnProperty)
+  if (ka.length !== kb.length)
+    return false;
+  //the same set of keys (although not necessarily the same order),
+  ka.sort();
+  kb.sort();
+  //~~~cheap key test
+  for (i = ka.length - 1; i >= 0; i--) {
+    if (ka[i] !== kb[i])
+      return false;
+  }
+  //equivalent values for every corresponding key, and
+  //~~~possibly expensive deep test
+  for (i = ka.length - 1; i >= 0; i--) {
+    key = ka[i];
+    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
+      return false;
+  }
+  return true;
+}
+
+// 8. The non-equivalence assertion tests for any deep inequality.
+// assert.notDeepEqual(actual, expected, message_opt);
+
+assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
+  }
+};
+
+assert.notDeepStrictEqual = notDeepStrictEqual;
+function notDeepStrictEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
+  }
+}
+
+
+// 9. The strict equality assertion tests strict equality, as determined by ===.
+// assert.strictEqual(actual, expected, message_opt);
+
+assert.strictEqual = function strictEqual(actual, expected, message) {
+  if (actual !== expected) {
+    fail(actual, expected, message, '===', assert.strictEqual);
+  }
+};
+
+// 10. The strict non-equality assertion tests for strict inequality, as
+// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
+
+assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
+  if (actual === expected) {
+    fail(actual, expected, message, '!==', assert.notStrictEqual);
+  }
+};
+
+function expectedException(actual, expected) {
+  if (!actual || !expected) {
+    return false;
+  }
+
+  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
+    return expected.test(actual);
+  }
+
+  try {
+    if (actual instanceof expected) {
+      return true;
+    }
+  } catch (e) {
+    // Ignore.  The instanceof check doesn't work for arrow functions.
+  }
+
+  if (Error.isPrototypeOf(expected)) {
+    return false;
+  }
+
+  return expected.call({}, actual) === true;
+}
+
+function _tryBlock(block) {
+  var error;
+  try {
+    block();
+  } catch (e) {
+    error = e;
+  }
+  return error;
+}
+
+function _throws(shouldThrow, block, expected, message) {
+  var actual;
+
+  if (typeof block !== 'function') {
+    throw new TypeError('"block" argument must be a function');
+  }
+
+  if (typeof expected === 'string') {
+    message = expected;
+    expected = null;
+  }
+
+  actual = _tryBlock(block);
+
+  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
+            (message ? ' ' + message : '.');
+
+  if (shouldThrow && !actual) {
+    fail(actual, expected, 'Missing expected exception' + message);
+  }
+
+  var userProvidedMessage = typeof message === 'string';
+  var isUnwantedException = !shouldThrow && util.isError(actual);
+  var isUnexpectedException = !shouldThrow && actual && !expected;
+
+  if ((isUnwantedException &&
+      userProvidedMessage &&
+      expectedException(actual, expected)) ||
+      isUnexpectedException) {
+    fail(actual, expected, 'Got unwanted exception' + message);
+  }
+
+  if ((shouldThrow && actual && expected &&
+      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
+    throw actual;
+  }
+}
+
+// 11. Expected to throw an error:
+// assert.throws(block, Error_opt, message_opt);
+
+assert.throws = function(block, /*optional*/error, /*optional*/message) {
+  _throws(true, block, error, message);
+};
+
+// EXTENSION! This is annoying to write outside this module.
+assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
+  _throws(false, block, error, message);
+};
+
+assert.ifError = function(err) { if (err) throw err; };
+
+// Expose a strict only variant of assert
+function strict(value, message) {
+  if (!value) fail(value, true, message, '==', strict);
+}
+assert.strict = objectAssign(strict, assert, {
+  equal: assert.strictEqual,
+  deepEqual: assert.deepStrictEqual,
+  notEqual: assert.notStrictEqual,
+  notDeepEqual: assert.notDeepStrictEqual
+});
+assert.strict.strict = assert.strict;
+
+var objectKeys = Object.keys || function (obj) {
+  var keys = [];
+  for (var key in obj) {
+    if (hasOwn.call(obj, key)) keys.push(key);
+  }
+  return keys;
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"object-assign":11,"util/":6}],4:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],5:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],6:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":5,"_process":12,"inherits":4}],7:[function(require,module,exports){
+'use strict'
+
+exports.byteLength = byteLength
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
+}
+
+// Support decoding URL-safe base64 strings, as Node.js does.
+// See: https://en.wikipedia.org/wiki/Base64#URL_applications
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
+
+function getLens (b64) {
+  var len = b64.length
+
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // Trim off extra bytes after placeholder bytes are found
+  // See: https://github.com/beatgammit/base64-js/issues/42
+  var validLen = b64.indexOf('=')
+  if (validLen === -1) validLen = len
+
+  var placeHoldersLen = validLen === len
+    ? 0
+    : 4 - (validLen % 4)
+
+  return [validLen, placeHoldersLen]
+}
+
+// base64 is 4/3 + up to two characters of the original data
+function byteLength (b64) {
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function _byteLength (b64, validLen, placeHoldersLen) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function toByteArray (b64) {
+  var tmp
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+
+  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
+
+  var curByte = 0
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  var len = placeHoldersLen > 0
+    ? validLen - 4
+    : validLen
+
+  for (var i = 0; i < len; i += 4) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 18) |
+      (revLookup[b64.charCodeAt(i + 1)] << 12) |
+      (revLookup[b64.charCodeAt(i + 2)] << 6) |
+      revLookup[b64.charCodeAt(i + 3)]
+    arr[curByte++] = (tmp >> 16) & 0xFF
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 2) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 2) |
+      (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 1) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 10) |
+      (revLookup[b64.charCodeAt(i + 1)] << 4) |
+      (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] +
+    lookup[num >> 12 & 0x3F] +
+    lookup[num >> 6 & 0x3F] +
+    lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp =
+      ((uint8[i] << 16) & 0xFF0000) +
+      ((uint8[i + 1] << 8) & 0xFF00) +
+      (uint8[i + 2] & 0xFF)
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(
+      uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)
+    ))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3F] +
+      '=='
+    )
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3F] +
+      lookup[(tmp << 2) & 0x3F] +
+      '='
+    )
+  }
+
+  return parts.join('')
+}
+
+},{}],8:[function(require,module,exports){
 var bigInt = (function (undefined) {
     "use strict";
 
@@ -1500,1884 +2785,7 @@ if (typeof define === "function" && define.amd) {
     });
 }
 
-},{}],4:[function(require,module,exports){
-(function (process){
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of websnark (Web Assembly zkSnark Prover).
-
-    websnark is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    websnark is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with websnark. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-/* globals WebAssembly, Blob, Worker, navigator, Promise, window */
-const bigInt = require("big-integer");
-const groth16_wasm = require("../build/groth16_wasm.js");
-const assert = require("assert");
-
-const inBrowser = (typeof window !== "undefined");
-let NodeWorker;
-let NodeCrypto;
-if (!inBrowser) {
-    NodeWorker = require("worker_threads").Worker;
-    NodeCrypto = require("crypto");
-}
-
-
-class Deferred {
-    constructor() {
-        this.promise = new Promise((resolve, reject)=> {
-            this.reject = reject;
-            this.resolve = resolve;
-        });
-    }
-}
-
-/*
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-*/
-
-function thread(self) {
-    let instance;
-    let memory;
-    let i32;
-
-    async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init});
-        i32 = new Uint32Array(memory.buffer);
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
-        });
-    }
-
-    function alloc(length) {
-        while (i32[0] & 3) i32[0]++;  // Return always aligned pointers
-        const res = i32[0];
-        i32[0] += length;
-        return res;
-    }
-
-    function putBin(b) {
-        const p = alloc(b.byteLength);
-        const s32 = new Uint32Array(b);
-        i32.set(s32, p/4);
-        return p;
-    }
-
-    function getBin(p, l) {
-        return memory.buffer.slice(p, p+l);
-    }
-
-    self.onmessage = function(e) {
-        let data;
-        if (e.data) {
-            data = e.data;
-        } else {
-            data = e;
-        }
-
-        if (data.command == "INIT") {
-            init(data).then(function() {
-                self.postMessage(data.result);
-            });
-        } else if (data.command == "G1_MULTIEXP") {
-
-            const oldAlloc = i32[0];
-            const pScalars = putBin(data.scalars);
-            const pPoints = putBin(data.points);
-            const pRes = alloc(96);
-            instance.exports.g1_zero(pRes);
-            instance.exports.g1_multiexp2(pScalars, pPoints, data.n, 7, pRes);
-
-            data.result = getBin(pRes, 96);
-            i32[0] = oldAlloc;
-            self.postMessage(data.result, [data.result]);
-        } else if (data.command == "G2_MULTIEXP") {
-
-            const oldAlloc = i32[0];
-            const pScalars = putBin(data.scalars);
-            const pPoints = putBin(data.points);
-            const pRes = alloc(192);
-            instance.exports.g2_zero(pRes);
-            instance.exports.g2_multiexp(pScalars, pPoints, data.n, 7, pRes);
-
-            data.result = getBin(pRes, 192);
-            i32[0] = oldAlloc;
-            self.postMessage(data.result, [data.result]);
-        } else if (data.command == "CALC_H") {
-            const oldAlloc = i32[0];
-            const pSignals = putBin(data.signals);
-            const pPolsA = putBin(data.polsA);
-            const pPolsB = putBin(data.polsB);
-            const nSignals = data.nSignals;
-            const domainSize = data.domainSize;
-            const pSignalsM = alloc(nSignals*32);
-            const pPolA = alloc(domainSize*32);
-            const pPolB = alloc(domainSize*32);
-            const pPolA2 = alloc(domainSize*32*2);
-            const pPolB2 = alloc(domainSize*32*2);
-
-            instance.exports.fft_toMontgomeryN(pSignals, pSignalsM, nSignals);
-
-            instance.exports.pol_zero(pPolA, domainSize);
-            instance.exports.pol_zero(pPolB, domainSize);
-
-            instance.exports.pol_constructLC(pPolsA, pSignalsM, nSignals, pPolA);
-            instance.exports.pol_constructLC(pPolsB, pSignalsM, nSignals, pPolB);
-
-            instance.exports.fft_copyNInterleaved(pPolA, pPolA2, domainSize);
-            instance.exports.fft_copyNInterleaved(pPolB, pPolB2, domainSize);
-
-            instance.exports.fft_ifft(pPolA, domainSize, 0);
-            instance.exports.fft_ifft(pPolB, domainSize, 0);
-            instance.exports.fft_fft(pPolA, domainSize, 1);
-            instance.exports.fft_fft(pPolB, domainSize, 1);
-
-            instance.exports.fft_copyNInterleaved(pPolA, pPolA2+32, domainSize);
-            instance.exports.fft_copyNInterleaved(pPolB, pPolB2+32, domainSize);
-
-            instance.exports.fft_mulN(pPolA2, pPolB2, domainSize*2, pPolA2);
-
-            instance.exports.fft_ifft(pPolA2, domainSize*2, 0);
-
-            instance.exports.fft_fromMontgomeryN(pPolA2+domainSize*32, pPolA2+domainSize*32, domainSize);
-
-            data.result = getBin(pPolA2+domainSize*32, domainSize*32);
-            i32[0] = oldAlloc;
-            self.postMessage(data.result, [data.result]);
-        } else if (data.command == "TERMINATE") {
-            process.exit();
-        }
-    };
-}
-
-async function build() {
-
-    const groth16 = new Groth16();
-
-    groth16.q = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
-    groth16.r = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
-    groth16.n64 = Math.floor((groth16.q.minus(1).bitLength() - 1)/64) +1;
-    groth16.n32 = groth16.n64*2;
-    groth16.n8 = groth16.n64*8;
-
-    groth16.memory = new WebAssembly.Memory({initial:1000});
-    groth16.i32 = new Uint32Array(groth16.memory.buffer);
-
-    const wasmModule = await WebAssembly.compile(groth16_wasm.code);
-
-    groth16.instance = await WebAssembly.instantiate(wasmModule, {
-        env: {
-            "memory": groth16.memory
-        }
-    });
-
-    groth16.pq = groth16_wasm.pq;
-    groth16.pr = groth16_wasm.pr;
-
-    groth16.pr0 = groth16.alloc(192);
-    groth16.pr1 = groth16.alloc(192);
-
-    groth16.workers = [];
-    groth16.pendingDeferreds = [];
-    groth16.working = [];
-
-    let concurrency;
-
-    if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
-        concurrency = navigator.hardwareConcurrency;
-    } else {
-        concurrency = 8;
-    }
-
-    function getOnMsg(i) {
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            groth16.working[i]=false;
-            groth16.pendingDeferreds[i].resolve(data);
-            groth16.processWorks();
-        };
-    }
-
-    for (let i = 0; i<concurrency; i++) {
-
-        if (inBrowser) {
-            const blob = new Blob(["(", thread.toString(), ")(self);"], { type: "text/javascript" });
-            const url = URL.createObjectURL(blob);
-
-            groth16.workers[i] = new Worker(url);
-
-            groth16.workers[i].onmessage = getOnMsg(i);
-
-        } else {
-            groth16.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
-
-            groth16.workers[i].on("message", getOnMsg(i));
-        }
-
-        groth16.working[i]=false;
-    }
-
-    const initPromises = [];
-    for (let i=0; i<groth16.workers.length;i++) {
-        const copyCode = groth16_wasm.code.buffer.slice(0);
-        initPromises.push(groth16.postAction(i, {
-            command: "INIT",
-            init: 1000,
-            code: copyCode
-
-        }, [copyCode]));
-    }
-
-    await Promise.all(initPromises);
-
-    return groth16;
-}
-
-class Groth16 {
-    constructor() {
-        this.actionQueue = [];
-    }
-
-    postAction(workerId, e, transfers, _deferred) {
-        assert(this.working[workerId] == false);
-        this.working[workerId] = true;
-
-        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        this.workers[workerId].postMessage(e, transfers);
-
-        return this.pendingDeferreds[workerId].promise;
-    }
-
-    processWorks() {
-        for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
-                const work = this.actionQueue.shift();
-                this.postAction(i, work.data, work.transfers, work.deferred);
-            }
-        }
-    }
-
-    queueAction(actionData, transfers) {
-        const d = new Deferred();
-        this.actionQueue.push({
-            data: actionData,
-            transfers: transfers,
-            deferred: d
-        });
-        this.processWorks();
-        return d.promise;
-    }
-
-    alloc(length) {
-        while (this.i32[0] & 3) this.i32[0]++;  // Return always aligned pointers
-        const res = this.i32[0];
-        this.i32[0] += length;
-        return res;
-    }
-
-
-    putBin(p, b) {
-        const s32 = new Uint32Array(b);
-        this.i32.set(s32, p/4);
-    }
-
-    getBin(p, l) {
-        return this.memory.buffer.slice(p, p+l);
-    }
-
-    bin2int(b) {
-        const i32 = new Uint32Array(b);
-        let acc = bigInt(i32[7]);
-        for (let i=6; i>=0; i--) {
-            acc = acc.shiftLeft(32);
-            acc = acc.add(i32[i]);
-        }
-        return acc.toString();
-    }
-
-    bin2g1(b) {
-        return [
-            this.bin2int(b.slice(0,32)),
-            this.bin2int(b.slice(32,64)),
-            this.bin2int(b.slice(64,96)),
-        ];
-    }
-    bin2g2(b) {
-        return [
-            [
-                this.bin2int(b.slice(0,32)),
-                this.bin2int(b.slice(32,64))
-            ],
-            [
-                this.bin2int(b.slice(64,96)),
-                this.bin2int(b.slice(96,128))
-            ],
-            [
-                this.bin2int(b.slice(128,160)),
-                this.bin2int(b.slice(160,192))
-            ],
-        ];
-    }
-
-    async g1_multiexp(scalars, points) {
-        const nPoints = scalars.byteLength /32;
-        const nPointsPerThread = Math.floor(nPoints / this.workers.length);
-        const opPromises = [];
-        for (let i=0; i<this.workers.length; i++) {
-            const th_nPoints =
-                i < this.workers.length -1 ?
-                    nPointsPerThread :
-                    nPoints - (nPointsPerThread * (this.workers.length -1));
-            const scalars_th = scalars.slice(i*nPointsPerThread*32, i*nPointsPerThread*32 + th_nPoints*32);
-            const points_th = points.slice(i*nPointsPerThread*64, i*nPointsPerThread*64 + th_nPoints*64);
-            opPromises.push(
-                this.queueAction({
-                    command: "G1_MULTIEXP",
-                    scalars: scalars_th,
-                    points: points_th,
-                    n: th_nPoints
-                }, [scalars_th, points_th])
-            );
-        }
-
-        const results = await Promise.all(opPromises);
-
-        this.instance.exports.g1_zero(this.pr0);
-        for (let i=0; i<results.length; i++) {
-            this.putBin(this.pr1, results[i]);
-            this.instance.exports.g1_add(this.pr0, this.pr1, this.pr0);
-        }
-
-        return this.getBin(this.pr0, 96);
-    }
-
-    async g2_multiexp(scalars, points) {
-        const nPoints = scalars.byteLength /32;
-        const nPointsPerThread = Math.floor(nPoints / this.workers.length);
-        const opPromises = [];
-        for (let i=0; i<this.workers.length; i++) {
-            const th_nPoints =
-                i < this.workers.length -1 ?
-                    nPointsPerThread :
-                    nPoints - (nPointsPerThread * (this.workers.length -1));
-            const scalars_th = scalars.slice(i*nPointsPerThread*32, i*nPointsPerThread*32 + th_nPoints*32);
-            const points_th = points.slice(i*nPointsPerThread*128, i*nPointsPerThread*128 + th_nPoints*128);
-            opPromises.push(
-                this.queueAction({
-                    command: "G2_MULTIEXP",
-                    scalars: scalars_th,
-                    points: points_th,
-                    n: th_nPoints
-                }, [scalars_th, points_th])
-            );
-        }
-
-        const results = await Promise.all(opPromises);
-
-        this.instance.exports.g2_zero(this.pr0);
-        for (let i=0; i<results.length; i++) {
-            this.putBin(this.pr1, results[i]);
-            this.instance.exports.g2_add(this.pr0, this.pr1, this.pr0);
-        }
-
-        return this.getBin(this.pr0, 192);
-    }
-
-    g1_affine(p) {
-        this.putBin(this.pr0, p);
-        this.instance.exports.g1_affine(this.pr0, this.pr0);
-        return this.getBin(this.pr0, 96);
-    }
-
-    g2_affine(p) {
-        this.putBin(this.pr0, p);
-        this.instance.exports.g2_affine(this.pr0, this.pr0);
-        return this.getBin(this.pr0, 192);
-    }
-
-    g1_fromMontgomery(p) {
-        this.putBin(this.pr0, p);
-        this.instance.exports.g1_fromMontgomery(this.pr0, this.pr0);
-        return this.getBin(this.pr0, 96);
-    }
-
-    g2_fromMontgomery(p) {
-        this.putBin(this.pr0, p);
-        this.instance.exports.g2_fromMontgomery(this.pr0, this.pr0);
-        return this.getBin(this.pr0, 192);
-    }
-
-    loadPoint1(b) {
-        const p = this.alloc(96);
-        this.putBin(p, b);
-        this.instance.exports.f1m_one(p+64);
-        return p;
-    }
-
-    loadPoint2(b) {
-        const p = this.alloc(192);
-        this.putBin(p, b);
-        this.instance.exports.f2m_one(p+128);
-        return p;
-    }
-
-    terminate() {
-        for (let i=0; i<this.workers.length; i++) {
-            this.workers[i].postMessage({command: "TERMINATE"});
-        }
-    }
-
-
-    async calcH(signals, polsA, polsB, nSignals, domainSize) {
-        return this.queueAction({
-            command: "CALC_H",
-            signals: signals,
-            polsA: polsA,
-            polsB: polsB,
-            nSignals: nSignals,
-            domainSize: domainSize
-        }, [signals, polsA, polsB]);
-    }
-
-    async proof(signals, pkey) {
-        const pkey32 = new Uint32Array(pkey);
-        const nSignals = pkey32[0];
-        const nPublic = pkey32[1];
-        const domainSize = pkey32[2];
-        const pPolsA = pkey32[3];
-        const pPolsB = pkey32[4];
-        const pPointsA = pkey32[5];
-        const pPointsB1 = pkey32[6];
-        const pPointsB2 = pkey32[7];
-        const pPointsC = pkey32[8];
-        const pHExps = pkey32[9];
-        const polsA = pkey.slice(pPolsA, pPolsA + pPolsB);
-        const polsB = pkey.slice(pPolsB, pPolsB + pPointsA);
-        const pointsA = pkey.slice(pPointsA, pPointsA + nSignals*64);
-        const pointsB1 = pkey.slice(pPointsB1, pPointsB1 + nSignals*64);
-        const pointsB2 = pkey.slice(pPointsB2, pPointsB2 + nSignals*128);
-        const pointsC = pkey.slice(pPointsC, pPointsC + (nSignals-nPublic-1)*64);
-        const pointsHExps = pkey.slice(pHExps, pHExps + domainSize*64);
-
-        const alfa1 = pkey.slice(10*4, 10*4 + 64);
-        const beta1 = pkey.slice(10*4 + 64, 10*4 + 128);
-        const delta1 = pkey.slice(10*4 + 128, 10*4 + 192);
-        const beta2 = pkey.slice(10*4 + 192, 10*4 + 320);
-        const delta2 = pkey.slice(10*4 + 320, 10*4 + 448);
-
-
-        const pH = this.calcH(signals.slice(0), polsA, polsB, nSignals, domainSize).then( (h) => {
-/* Debug code to print the result of h
-            for (let i=0; i<domainSize; i++) {
-                const a = this.bin2int(h.slice(i*32, i*32+32));
-                console.log(i + " -> " + a.toString());
-            }
-*/
-            return this.g1_multiexp(h, pointsHExps);
-        });
-
-        const pA = this.g1_multiexp(signals.slice(0), pointsA);
-        const pB1 = this.g1_multiexp(signals.slice(0), pointsB1);
-        const pB2 = this.g2_multiexp(signals.slice(0), pointsB2);
-        const pC = this.g1_multiexp(signals.slice((nPublic+1)*32), pointsC);
-
-        const res = await Promise.all([pA, pB1, pB2, pC, pH]);
-
-        const pi_a = this.alloc(96);
-        const pi_b = this.alloc(192);
-        const pi_c = this.alloc(96);
-        const pib1 = this.alloc(96);
-
-
-        this.putBin(pi_a, res[0]);
-        this.putBin(pib1, res[1]);
-        this.putBin(pi_b, res[2]);
-        this.putBin(pi_c, res[3]);
-
-        const pAlfa1 = this.loadPoint1(alfa1);
-        const pBeta1 = this.loadPoint1(beta1);
-        const pDelta1 = this.loadPoint1(delta1);
-        const pBeta2 = this.loadPoint2(beta2);
-        const pDelta2 = this.loadPoint2(delta2);
-
-
-        let rnd = new Uint32Array(8);
-
-        const aux1 = this.alloc(96);
-        const aux2 = this.alloc(192);
-
-        const pr = this.alloc(32);
-        const ps = this.alloc(32);
-
-        if (inBrowser) {
-            window.crypto.getRandomValues(rnd);
-            this.putBin(pr, rnd);
-
-            window.crypto.getRandomValues(rnd);
-            this.putBin(ps, rnd);
-        } else {
-            const br = NodeCrypto.randomBytes(32);
-            this.putBin(pr, br);
-            const bs = NodeCrypto.randomBytes(32);
-            this.putBin(ps, bs);
-        }
-
-/// Uncoment it to debug and check it works
-//        this.instance.exports.f1m_zero(pr);
-//        this.instance.exports.f1m_zero(ps);
-
-        // pi_a = pi_a + Alfa1 + r*Delta1
-        this.instance.exports.g1_add(pAlfa1, pi_a, pi_a);
-        this.instance.exports.g1_timesScalar(pDelta1, pr, 32, aux1);
-        this.instance.exports.g1_add(aux1, pi_a, pi_a);
-
-        // pi_b = pi_b + Beta2 + s*Delta2
-        this.instance.exports.g2_add(pBeta2, pi_b, pi_b);
-        this.instance.exports.g2_timesScalar(pDelta2, ps, 32, aux2);
-        this.instance.exports.g2_add(aux2, pi_b, pi_b);
-
-        // pib1 = pib1 + Beta1 + s*Delta1
-        this.instance.exports.g1_add(pBeta1, pib1, pib1);
-        this.instance.exports.g1_timesScalar(pDelta1, ps, 32, aux1);
-        this.instance.exports.g1_add(aux1, pib1, pib1);
-
-
-        // pi_c = pi_c + pH
-        this.putBin(aux1, res[4]);
-        this.instance.exports.g1_add(aux1, pi_c, pi_c);
-
-
-        // pi_c = pi_c + s*pi_a
-        this.instance.exports.g1_timesScalar(pi_a, ps, 32, aux1);
-        this.instance.exports.g1_add(aux1, pi_c, pi_c);
-
-        // pi_c = pi_c + r*pib1
-        this.instance.exports.g1_timesScalar(pib1, pr, 32, aux1);
-        this.instance.exports.g1_add(aux1, pi_c, pi_c);
-
-        // pi_c = pi_c - r*s*delta1
-        const prs = this.alloc(64);
-        this.instance.exports.int_mul(pr, ps, prs);
-        this.instance.exports.g1_timesScalar(pDelta1, prs, 64, aux1);
-        this.instance.exports.g1_neg(aux1, aux1);
-        this.instance.exports.g1_add(aux1, pi_c, pi_c);
-
-        this.instance.exports.g1_affine(pi_a, pi_a);
-        this.instance.exports.g2_affine(pi_b, pi_b);
-        this.instance.exports.g1_affine(pi_c, pi_c);
-
-        this.instance.exports.g1_fromMontgomery(pi_a, pi_a);
-        this.instance.exports.g2_fromMontgomery(pi_b, pi_b);
-        this.instance.exports.g1_fromMontgomery(pi_c, pi_c);
-
-        return {
-            pi_a: this.bin2g1(this.getBin(pi_a, 96)),
-            pi_b: this.bin2g2(this.getBin(pi_b, 192)),
-            pi_c: this.bin2g1(this.getBin(pi_c, 96)),
-        };
-
-    }
-
-}
-
-module.exports = build;
-
-}).call(this,require('_process'))
-},{"../build/groth16_wasm.js":1,"_process":12,"assert":5,"big-integer":3,"crypto":undefined,"worker_threads":undefined}],5:[function(require,module,exports){
-(function (global){
-'use strict';
-
-// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
-// original notice:
-
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-function compare(a, b) {
-  if (a === b) {
-    return 0;
-  }
-
-  var x = a.length;
-  var y = b.length;
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i];
-      y = b[i];
-      break;
-    }
-  }
-
-  if (x < y) {
-    return -1;
-  }
-  if (y < x) {
-    return 1;
-  }
-  return 0;
-}
-function isBuffer(b) {
-  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
-    return global.Buffer.isBuffer(b);
-  }
-  return !!(b != null && b._isBuffer);
-}
-
-// based on node assert, original notice:
-
-// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
-//
-// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
-//
-// Originally from narwhal.js (http://narwhaljs.org)
-// Copyright (c) 2009 Thomas Robinson <280north.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the 'Software'), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var util = require('util/');
-var hasOwn = Object.prototype.hasOwnProperty;
-var pSlice = Array.prototype.slice;
-var functionsHaveNames = (function () {
-  return function foo() {}.name === 'foo';
-}());
-function pToString (obj) {
-  return Object.prototype.toString.call(obj);
-}
-function isView(arrbuf) {
-  if (isBuffer(arrbuf)) {
-    return false;
-  }
-  if (typeof global.ArrayBuffer !== 'function') {
-    return false;
-  }
-  if (typeof ArrayBuffer.isView === 'function') {
-    return ArrayBuffer.isView(arrbuf);
-  }
-  if (!arrbuf) {
-    return false;
-  }
-  if (arrbuf instanceof DataView) {
-    return true;
-  }
-  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
-    return true;
-  }
-  return false;
-}
-// 1. The assert module provides functions that throw
-// AssertionError's when particular conditions are not met. The
-// assert module must conform to the following interface.
-
-var assert = module.exports = ok;
-
-// 2. The AssertionError is defined in assert.
-// new assert.AssertionError({ message: message,
-//                             actual: actual,
-//                             expected: expected })
-
-var regex = /\s*function\s+([^\(\s]*)\s*/;
-// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
-function getName(func) {
-  if (!util.isFunction(func)) {
-    return;
-  }
-  if (functionsHaveNames) {
-    return func.name;
-  }
-  var str = func.toString();
-  var match = str.match(regex);
-  return match && match[1];
-}
-assert.AssertionError = function AssertionError(options) {
-  this.name = 'AssertionError';
-  this.actual = options.actual;
-  this.expected = options.expected;
-  this.operator = options.operator;
-  if (options.message) {
-    this.message = options.message;
-    this.generatedMessage = false;
-  } else {
-    this.message = getMessage(this);
-    this.generatedMessage = true;
-  }
-  var stackStartFunction = options.stackStartFunction || fail;
-  if (Error.captureStackTrace) {
-    Error.captureStackTrace(this, stackStartFunction);
-  } else {
-    // non v8 browsers so we can have a stacktrace
-    var err = new Error();
-    if (err.stack) {
-      var out = err.stack;
-
-      // try to strip useless frames
-      var fn_name = getName(stackStartFunction);
-      var idx = out.indexOf('\n' + fn_name);
-      if (idx >= 0) {
-        // once we have located the function frame
-        // we need to strip out everything before it (and its line)
-        var next_line = out.indexOf('\n', idx + 1);
-        out = out.substring(next_line + 1);
-      }
-
-      this.stack = out;
-    }
-  }
-};
-
-// assert.AssertionError instanceof Error
-util.inherits(assert.AssertionError, Error);
-
-function truncate(s, n) {
-  if (typeof s === 'string') {
-    return s.length < n ? s : s.slice(0, n);
-  } else {
-    return s;
-  }
-}
-function inspect(something) {
-  if (functionsHaveNames || !util.isFunction(something)) {
-    return util.inspect(something);
-  }
-  var rawname = getName(something);
-  var name = rawname ? ': ' + rawname : '';
-  return '[Function' +  name + ']';
-}
-function getMessage(self) {
-  return truncate(inspect(self.actual), 128) + ' ' +
-         self.operator + ' ' +
-         truncate(inspect(self.expected), 128);
-}
-
-// At present only the three keys mentioned above are used and
-// understood by the spec. Implementations or sub modules can pass
-// other keys to the AssertionError's constructor - they will be
-// ignored.
-
-// 3. All of the following functions must throw an AssertionError
-// when a corresponding condition is not met, with a message that
-// may be undefined if not provided.  All assertion methods provide
-// both the actual and expected values to the assertion error for
-// display purposes.
-
-function fail(actual, expected, message, operator, stackStartFunction) {
-  throw new assert.AssertionError({
-    message: message,
-    actual: actual,
-    expected: expected,
-    operator: operator,
-    stackStartFunction: stackStartFunction
-  });
-}
-
-// EXTENSION! allows for well behaved errors defined elsewhere.
-assert.fail = fail;
-
-// 4. Pure assertion tests whether a value is truthy, as determined
-// by !!guard.
-// assert.ok(guard, message_opt);
-// This statement is equivalent to assert.equal(true, !!guard,
-// message_opt);. To test strictly for the value true, use
-// assert.strictEqual(true, guard, message_opt);.
-
-function ok(value, message) {
-  if (!value) fail(value, true, message, '==', assert.ok);
-}
-assert.ok = ok;
-
-// 5. The equality assertion tests shallow, coercive equality with
-// ==.
-// assert.equal(actual, expected, message_opt);
-
-assert.equal = function equal(actual, expected, message) {
-  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
-};
-
-// 6. The non-equality assertion tests for whether two objects are not equal
-// with != assert.notEqual(actual, expected, message_opt);
-
-assert.notEqual = function notEqual(actual, expected, message) {
-  if (actual == expected) {
-    fail(actual, expected, message, '!=', assert.notEqual);
-  }
-};
-
-// 7. The equivalence assertion tests a deep equality relation.
-// assert.deepEqual(actual, expected, message_opt);
-
-assert.deepEqual = function deepEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
-  }
-};
-
-assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
-  }
-};
-
-function _deepEqual(actual, expected, strict, memos) {
-  // 7.1. All identical values are equivalent, as determined by ===.
-  if (actual === expected) {
-    return true;
-  } else if (isBuffer(actual) && isBuffer(expected)) {
-    return compare(actual, expected) === 0;
-
-  // 7.2. If the expected value is a Date object, the actual value is
-  // equivalent if it is also a Date object that refers to the same time.
-  } else if (util.isDate(actual) && util.isDate(expected)) {
-    return actual.getTime() === expected.getTime();
-
-  // 7.3 If the expected value is a RegExp object, the actual value is
-  // equivalent if it is also a RegExp object with the same source and
-  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
-  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
-    return actual.source === expected.source &&
-           actual.global === expected.global &&
-           actual.multiline === expected.multiline &&
-           actual.lastIndex === expected.lastIndex &&
-           actual.ignoreCase === expected.ignoreCase;
-
-  // 7.4. Other pairs that do not both pass typeof value == 'object',
-  // equivalence is determined by ==.
-  } else if ((actual === null || typeof actual !== 'object') &&
-             (expected === null || typeof expected !== 'object')) {
-    return strict ? actual === expected : actual == expected;
-
-  // If both values are instances of typed arrays, wrap their underlying
-  // ArrayBuffers in a Buffer each to increase performance
-  // This optimization requires the arrays to have the same type as checked by
-  // Object.prototype.toString (aka pToString). Never perform binary
-  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
-  // bit patterns are not identical.
-  } else if (isView(actual) && isView(expected) &&
-             pToString(actual) === pToString(expected) &&
-             !(actual instanceof Float32Array ||
-               actual instanceof Float64Array)) {
-    return compare(new Uint8Array(actual.buffer),
-                   new Uint8Array(expected.buffer)) === 0;
-
-  // 7.5 For all other Object pairs, including Array objects, equivalence is
-  // determined by having the same number of owned properties (as verified
-  // with Object.prototype.hasOwnProperty.call), the same set of keys
-  // (although not necessarily the same order), equivalent values for every
-  // corresponding key, and an identical 'prototype' property. Note: this
-  // accounts for both named and indexed properties on Arrays.
-  } else if (isBuffer(actual) !== isBuffer(expected)) {
-    return false;
-  } else {
-    memos = memos || {actual: [], expected: []};
-
-    var actualIndex = memos.actual.indexOf(actual);
-    if (actualIndex !== -1) {
-      if (actualIndex === memos.expected.indexOf(expected)) {
-        return true;
-      }
-    }
-
-    memos.actual.push(actual);
-    memos.expected.push(expected);
-
-    return objEquiv(actual, expected, strict, memos);
-  }
-}
-
-function isArguments(object) {
-  return Object.prototype.toString.call(object) == '[object Arguments]';
-}
-
-function objEquiv(a, b, strict, actualVisitedObjects) {
-  if (a === null || a === undefined || b === null || b === undefined)
-    return false;
-  // if one is a primitive, the other must be same
-  if (util.isPrimitive(a) || util.isPrimitive(b))
-    return a === b;
-  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
-    return false;
-  var aIsArgs = isArguments(a);
-  var bIsArgs = isArguments(b);
-  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
-    return false;
-  if (aIsArgs) {
-    a = pSlice.call(a);
-    b = pSlice.call(b);
-    return _deepEqual(a, b, strict);
-  }
-  var ka = objectKeys(a);
-  var kb = objectKeys(b);
-  var key, i;
-  // having the same number of owned properties (keys incorporates
-  // hasOwnProperty)
-  if (ka.length !== kb.length)
-    return false;
-  //the same set of keys (although not necessarily the same order),
-  ka.sort();
-  kb.sort();
-  //~~~cheap key test
-  for (i = ka.length - 1; i >= 0; i--) {
-    if (ka[i] !== kb[i])
-      return false;
-  }
-  //equivalent values for every corresponding key, and
-  //~~~possibly expensive deep test
-  for (i = ka.length - 1; i >= 0; i--) {
-    key = ka[i];
-    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
-      return false;
-  }
-  return true;
-}
-
-// 8. The non-equivalence assertion tests for any deep inequality.
-// assert.notDeepEqual(actual, expected, message_opt);
-
-assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
-  }
-};
-
-assert.notDeepStrictEqual = notDeepStrictEqual;
-function notDeepStrictEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
-  }
-}
-
-
-// 9. The strict equality assertion tests strict equality, as determined by ===.
-// assert.strictEqual(actual, expected, message_opt);
-
-assert.strictEqual = function strictEqual(actual, expected, message) {
-  if (actual !== expected) {
-    fail(actual, expected, message, '===', assert.strictEqual);
-  }
-};
-
-// 10. The strict non-equality assertion tests for strict inequality, as
-// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
-
-assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
-  if (actual === expected) {
-    fail(actual, expected, message, '!==', assert.notStrictEqual);
-  }
-};
-
-function expectedException(actual, expected) {
-  if (!actual || !expected) {
-    return false;
-  }
-
-  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
-    return expected.test(actual);
-  }
-
-  try {
-    if (actual instanceof expected) {
-      return true;
-    }
-  } catch (e) {
-    // Ignore.  The instanceof check doesn't work for arrow functions.
-  }
-
-  if (Error.isPrototypeOf(expected)) {
-    return false;
-  }
-
-  return expected.call({}, actual) === true;
-}
-
-function _tryBlock(block) {
-  var error;
-  try {
-    block();
-  } catch (e) {
-    error = e;
-  }
-  return error;
-}
-
-function _throws(shouldThrow, block, expected, message) {
-  var actual;
-
-  if (typeof block !== 'function') {
-    throw new TypeError('"block" argument must be a function');
-  }
-
-  if (typeof expected === 'string') {
-    message = expected;
-    expected = null;
-  }
-
-  actual = _tryBlock(block);
-
-  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
-            (message ? ' ' + message : '.');
-
-  if (shouldThrow && !actual) {
-    fail(actual, expected, 'Missing expected exception' + message);
-  }
-
-  var userProvidedMessage = typeof message === 'string';
-  var isUnwantedException = !shouldThrow && util.isError(actual);
-  var isUnexpectedException = !shouldThrow && actual && !expected;
-
-  if ((isUnwantedException &&
-      userProvidedMessage &&
-      expectedException(actual, expected)) ||
-      isUnexpectedException) {
-    fail(actual, expected, 'Got unwanted exception' + message);
-  }
-
-  if ((shouldThrow && actual && expected &&
-      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
-    throw actual;
-  }
-}
-
-// 11. Expected to throw an error:
-// assert.throws(block, Error_opt, message_opt);
-
-assert.throws = function(block, /*optional*/error, /*optional*/message) {
-  _throws(true, block, error, message);
-};
-
-// EXTENSION! This is annoying to write outside this module.
-assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
-  _throws(false, block, error, message);
-};
-
-assert.ifError = function(err) { if (err) throw err; };
-
-var objectKeys = Object.keys || function (obj) {
-  var keys = [];
-  for (var key in obj) {
-    if (hasOwn.call(obj, key)) keys.push(key);
-  }
-  return keys;
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"util/":8}],6:[function(require,module,exports){
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
-  };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
-}
-
-},{}],7:[function(require,module,exports){
-module.exports = function isBuffer(arg) {
-  return arg && typeof arg === 'object'
-    && typeof arg.copy === 'function'
-    && typeof arg.fill === 'function'
-    && typeof arg.readUInt8 === 'function';
-}
-},{}],8:[function(require,module,exports){
-(function (process,global){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var formatRegExp = /%[sdj%]/g;
-exports.format = function(f) {
-  if (!isString(f)) {
-    var objects = [];
-    for (var i = 0; i < arguments.length; i++) {
-      objects.push(inspect(arguments[i]));
-    }
-    return objects.join(' ');
-  }
-
-  var i = 1;
-  var args = arguments;
-  var len = args.length;
-  var str = String(f).replace(formatRegExp, function(x) {
-    if (x === '%%') return '%';
-    if (i >= len) return x;
-    switch (x) {
-      case '%s': return String(args[i++]);
-      case '%d': return Number(args[i++]);
-      case '%j':
-        try {
-          return JSON.stringify(args[i++]);
-        } catch (_) {
-          return '[Circular]';
-        }
-      default:
-        return x;
-    }
-  });
-  for (var x = args[i]; i < len; x = args[++i]) {
-    if (isNull(x) || !isObject(x)) {
-      str += ' ' + x;
-    } else {
-      str += ' ' + inspect(x);
-    }
-  }
-  return str;
-};
-
-
-// Mark that a method should not be used.
-// Returns a modified function which warns once by default.
-// If --no-deprecation is set, then it is a no-op.
-exports.deprecate = function(fn, msg) {
-  // Allow for deprecating things in the process of starting up.
-  if (isUndefined(global.process)) {
-    return function() {
-      return exports.deprecate(fn, msg).apply(this, arguments);
-    };
-  }
-
-  if (process.noDeprecation === true) {
-    return fn;
-  }
-
-  var warned = false;
-  function deprecated() {
-    if (!warned) {
-      if (process.throwDeprecation) {
-        throw new Error(msg);
-      } else if (process.traceDeprecation) {
-        console.trace(msg);
-      } else {
-        console.error(msg);
-      }
-      warned = true;
-    }
-    return fn.apply(this, arguments);
-  }
-
-  return deprecated;
-};
-
-
-var debugs = {};
-var debugEnviron;
-exports.debuglog = function(set) {
-  if (isUndefined(debugEnviron))
-    debugEnviron = process.env.NODE_DEBUG || '';
-  set = set.toUpperCase();
-  if (!debugs[set]) {
-    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
-      var pid = process.pid;
-      debugs[set] = function() {
-        var msg = exports.format.apply(exports, arguments);
-        console.error('%s %d: %s', set, pid, msg);
-      };
-    } else {
-      debugs[set] = function() {};
-    }
-  }
-  return debugs[set];
-};
-
-
-/**
- * Echos the value of a value. Trys to print the value out
- * in the best way possible given the different types.
- *
- * @param {Object} obj The object to print out.
- * @param {Object} opts Optional options object that alters the output.
- */
-/* legacy: obj, showHidden, depth, colors*/
-function inspect(obj, opts) {
-  // default options
-  var ctx = {
-    seen: [],
-    stylize: stylizeNoColor
-  };
-  // legacy...
-  if (arguments.length >= 3) ctx.depth = arguments[2];
-  if (arguments.length >= 4) ctx.colors = arguments[3];
-  if (isBoolean(opts)) {
-    // legacy...
-    ctx.showHidden = opts;
-  } else if (opts) {
-    // got an "options" object
-    exports._extend(ctx, opts);
-  }
-  // set default options
-  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
-  if (isUndefined(ctx.depth)) ctx.depth = 2;
-  if (isUndefined(ctx.colors)) ctx.colors = false;
-  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
-  if (ctx.colors) ctx.stylize = stylizeWithColor;
-  return formatValue(ctx, obj, ctx.depth);
-}
-exports.inspect = inspect;
-
-
-// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
-inspect.colors = {
-  'bold' : [1, 22],
-  'italic' : [3, 23],
-  'underline' : [4, 24],
-  'inverse' : [7, 27],
-  'white' : [37, 39],
-  'grey' : [90, 39],
-  'black' : [30, 39],
-  'blue' : [34, 39],
-  'cyan' : [36, 39],
-  'green' : [32, 39],
-  'magenta' : [35, 39],
-  'red' : [31, 39],
-  'yellow' : [33, 39]
-};
-
-// Don't use 'blue' not visible on cmd.exe
-inspect.styles = {
-  'special': 'cyan',
-  'number': 'yellow',
-  'boolean': 'yellow',
-  'undefined': 'grey',
-  'null': 'bold',
-  'string': 'green',
-  'date': 'magenta',
-  // "name": intentionally not styling
-  'regexp': 'red'
-};
-
-
-function stylizeWithColor(str, styleType) {
-  var style = inspect.styles[styleType];
-
-  if (style) {
-    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
-           '\u001b[' + inspect.colors[style][1] + 'm';
-  } else {
-    return str;
-  }
-}
-
-
-function stylizeNoColor(str, styleType) {
-  return str;
-}
-
-
-function arrayToHash(array) {
-  var hash = {};
-
-  array.forEach(function(val, idx) {
-    hash[val] = true;
-  });
-
-  return hash;
-}
-
-
-function formatValue(ctx, value, recurseTimes) {
-  // Provide a hook for user-specified inspect functions.
-  // Check that value is an object with an inspect function on it
-  if (ctx.customInspect &&
-      value &&
-      isFunction(value.inspect) &&
-      // Filter out the util module, it's inspect function is special
-      value.inspect !== exports.inspect &&
-      // Also filter out any prototype objects using the circular check.
-      !(value.constructor && value.constructor.prototype === value)) {
-    var ret = value.inspect(recurseTimes, ctx);
-    if (!isString(ret)) {
-      ret = formatValue(ctx, ret, recurseTimes);
-    }
-    return ret;
-  }
-
-  // Primitive types cannot have properties
-  var primitive = formatPrimitive(ctx, value);
-  if (primitive) {
-    return primitive;
-  }
-
-  // Look up the keys of the object.
-  var keys = Object.keys(value);
-  var visibleKeys = arrayToHash(keys);
-
-  if (ctx.showHidden) {
-    keys = Object.getOwnPropertyNames(value);
-  }
-
-  // IE doesn't make error fields non-enumerable
-  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
-  if (isError(value)
-      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
-    return formatError(value);
-  }
-
-  // Some type of object without properties can be shortcutted.
-  if (keys.length === 0) {
-    if (isFunction(value)) {
-      var name = value.name ? ': ' + value.name : '';
-      return ctx.stylize('[Function' + name + ']', 'special');
-    }
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    }
-    if (isDate(value)) {
-      return ctx.stylize(Date.prototype.toString.call(value), 'date');
-    }
-    if (isError(value)) {
-      return formatError(value);
-    }
-  }
-
-  var base = '', array = false, braces = ['{', '}'];
-
-  // Make Array say that they are Array
-  if (isArray(value)) {
-    array = true;
-    braces = ['[', ']'];
-  }
-
-  // Make functions say that they are functions
-  if (isFunction(value)) {
-    var n = value.name ? ': ' + value.name : '';
-    base = ' [Function' + n + ']';
-  }
-
-  // Make RegExps say that they are RegExps
-  if (isRegExp(value)) {
-    base = ' ' + RegExp.prototype.toString.call(value);
-  }
-
-  // Make dates with properties first say the date
-  if (isDate(value)) {
-    base = ' ' + Date.prototype.toUTCString.call(value);
-  }
-
-  // Make error with message first say the error
-  if (isError(value)) {
-    base = ' ' + formatError(value);
-  }
-
-  if (keys.length === 0 && (!array || value.length == 0)) {
-    return braces[0] + base + braces[1];
-  }
-
-  if (recurseTimes < 0) {
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    } else {
-      return ctx.stylize('[Object]', 'special');
-    }
-  }
-
-  ctx.seen.push(value);
-
-  var output;
-  if (array) {
-    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
-  } else {
-    output = keys.map(function(key) {
-      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
-    });
-  }
-
-  ctx.seen.pop();
-
-  return reduceToSingleString(output, base, braces);
-}
-
-
-function formatPrimitive(ctx, value) {
-  if (isUndefined(value))
-    return ctx.stylize('undefined', 'undefined');
-  if (isString(value)) {
-    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
-                                             .replace(/'/g, "\\'")
-                                             .replace(/\\"/g, '"') + '\'';
-    return ctx.stylize(simple, 'string');
-  }
-  if (isNumber(value))
-    return ctx.stylize('' + value, 'number');
-  if (isBoolean(value))
-    return ctx.stylize('' + value, 'boolean');
-  // For some reason typeof null is "object", so special case here.
-  if (isNull(value))
-    return ctx.stylize('null', 'null');
-}
-
-
-function formatError(value) {
-  return '[' + Error.prototype.toString.call(value) + ']';
-}
-
-
-function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
-  var output = [];
-  for (var i = 0, l = value.length; i < l; ++i) {
-    if (hasOwnProperty(value, String(i))) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          String(i), true));
-    } else {
-      output.push('');
-    }
-  }
-  keys.forEach(function(key) {
-    if (!key.match(/^\d+$/)) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          key, true));
-    }
-  });
-  return output;
-}
-
-
-function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
-  var name, str, desc;
-  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
-  if (desc.get) {
-    if (desc.set) {
-      str = ctx.stylize('[Getter/Setter]', 'special');
-    } else {
-      str = ctx.stylize('[Getter]', 'special');
-    }
-  } else {
-    if (desc.set) {
-      str = ctx.stylize('[Setter]', 'special');
-    }
-  }
-  if (!hasOwnProperty(visibleKeys, key)) {
-    name = '[' + key + ']';
-  }
-  if (!str) {
-    if (ctx.seen.indexOf(desc.value) < 0) {
-      if (isNull(recurseTimes)) {
-        str = formatValue(ctx, desc.value, null);
-      } else {
-        str = formatValue(ctx, desc.value, recurseTimes - 1);
-      }
-      if (str.indexOf('\n') > -1) {
-        if (array) {
-          str = str.split('\n').map(function(line) {
-            return '  ' + line;
-          }).join('\n').substr(2);
-        } else {
-          str = '\n' + str.split('\n').map(function(line) {
-            return '   ' + line;
-          }).join('\n');
-        }
-      }
-    } else {
-      str = ctx.stylize('[Circular]', 'special');
-    }
-  }
-  if (isUndefined(name)) {
-    if (array && key.match(/^\d+$/)) {
-      return str;
-    }
-    name = JSON.stringify('' + key);
-    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
-      name = name.substr(1, name.length - 2);
-      name = ctx.stylize(name, 'name');
-    } else {
-      name = name.replace(/'/g, "\\'")
-                 .replace(/\\"/g, '"')
-                 .replace(/(^"|"$)/g, "'");
-      name = ctx.stylize(name, 'string');
-    }
-  }
-
-  return name + ': ' + str;
-}
-
-
-function reduceToSingleString(output, base, braces) {
-  var numLinesEst = 0;
-  var length = output.reduce(function(prev, cur) {
-    numLinesEst++;
-    if (cur.indexOf('\n') >= 0) numLinesEst++;
-    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
-  }, 0);
-
-  if (length > 60) {
-    return braces[0] +
-           (base === '' ? '' : base + '\n ') +
-           ' ' +
-           output.join(',\n  ') +
-           ' ' +
-           braces[1];
-  }
-
-  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
-}
-
-
-// NOTE: These type checking functions intentionally don't use `instanceof`
-// because it is fragile and can be easily faked with `Object.create()`.
-function isArray(ar) {
-  return Array.isArray(ar);
-}
-exports.isArray = isArray;
-
-function isBoolean(arg) {
-  return typeof arg === 'boolean';
-}
-exports.isBoolean = isBoolean;
-
-function isNull(arg) {
-  return arg === null;
-}
-exports.isNull = isNull;
-
-function isNullOrUndefined(arg) {
-  return arg == null;
-}
-exports.isNullOrUndefined = isNullOrUndefined;
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-exports.isNumber = isNumber;
-
-function isString(arg) {
-  return typeof arg === 'string';
-}
-exports.isString = isString;
-
-function isSymbol(arg) {
-  return typeof arg === 'symbol';
-}
-exports.isSymbol = isSymbol;
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-exports.isUndefined = isUndefined;
-
-function isRegExp(re) {
-  return isObject(re) && objectToString(re) === '[object RegExp]';
-}
-exports.isRegExp = isRegExp;
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-exports.isObject = isObject;
-
-function isDate(d) {
-  return isObject(d) && objectToString(d) === '[object Date]';
-}
-exports.isDate = isDate;
-
-function isError(e) {
-  return isObject(e) &&
-      (objectToString(e) === '[object Error]' || e instanceof Error);
-}
-exports.isError = isError;
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-exports.isFunction = isFunction;
-
-function isPrimitive(arg) {
-  return arg === null ||
-         typeof arg === 'boolean' ||
-         typeof arg === 'number' ||
-         typeof arg === 'string' ||
-         typeof arg === 'symbol' ||  // ES6 symbol
-         typeof arg === 'undefined';
-}
-exports.isPrimitive = isPrimitive;
-
-exports.isBuffer = require('./support/isBuffer');
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-
-
-function pad(n) {
-  return n < 10 ? '0' + n.toString(10) : n.toString(10);
-}
-
-
-var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-              'Oct', 'Nov', 'Dec'];
-
-// 26 Feb 16:19:34
-function timestamp() {
-  var d = new Date();
-  var time = [pad(d.getHours()),
-              pad(d.getMinutes()),
-              pad(d.getSeconds())].join(':');
-  return [d.getDate(), months[d.getMonth()], time].join(' ');
-}
-
-
-// log is just a thin wrapper to console.log that prepends a timestamp
-exports.log = function() {
-  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
-};
-
-
-/**
- * Inherit the prototype methods from one constructor into another.
- *
- * The Function.prototype.inherits from lang.js rewritten as a standalone
- * function (not on Function.prototype). NOTE: If this file is to be loaded
- * during bootstrapping this function needs to be rewritten using some native
- * functions as prototype setup using normal JavaScript does not work as
- * expected during bootstrapping (see mirror.js in r114903).
- *
- * @param {function} ctor Constructor function which needs to inherit the
- *     prototype.
- * @param {function} superCtor Constructor function to inherit prototype from.
- */
-exports.inherits = require('inherits');
-
-exports._extend = function(origin, add) {
-  // Don't do anything if add isn't an object
-  if (!add || !isObject(add)) return origin;
-
-  var keys = Object.keys(add);
-  var i = keys.length;
-  while (i--) {
-    origin[keys[i]] = add[keys[i]];
-  }
-  return origin;
-};
-
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":7,"_process":12,"inherits":6}],9:[function(require,module,exports){
-'use strict'
-
-exports.byteLength = byteLength
-exports.toByteArray = toByteArray
-exports.fromByteArray = fromByteArray
-
-var lookup = []
-var revLookup = []
-var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
-
-var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-for (var i = 0, len = code.length; i < len; ++i) {
-  lookup[i] = code[i]
-  revLookup[code.charCodeAt(i)] = i
-}
-
-// Support decoding URL-safe base64 strings, as Node.js does.
-// See: https://en.wikipedia.org/wiki/Base64#URL_applications
-revLookup['-'.charCodeAt(0)] = 62
-revLookup['_'.charCodeAt(0)] = 63
-
-function getLens (b64) {
-  var len = b64.length
-
-  if (len % 4 > 0) {
-    throw new Error('Invalid string. Length must be a multiple of 4')
-  }
-
-  // Trim off extra bytes after placeholder bytes are found
-  // See: https://github.com/beatgammit/base64-js/issues/42
-  var validLen = b64.indexOf('=')
-  if (validLen === -1) validLen = len
-
-  var placeHoldersLen = validLen === len
-    ? 0
-    : 4 - (validLen % 4)
-
-  return [validLen, placeHoldersLen]
-}
-
-// base64 is 4/3 + up to two characters of the original data
-function byteLength (b64) {
-  var lens = getLens(b64)
-  var validLen = lens[0]
-  var placeHoldersLen = lens[1]
-  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
-}
-
-function _byteLength (b64, validLen, placeHoldersLen) {
-  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
-}
-
-function toByteArray (b64) {
-  var tmp
-  var lens = getLens(b64)
-  var validLen = lens[0]
-  var placeHoldersLen = lens[1]
-
-  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
-
-  var curByte = 0
-
-  // if there are placeholders, only get up to the last complete 4 chars
-  var len = placeHoldersLen > 0
-    ? validLen - 4
-    : validLen
-
-  for (var i = 0; i < len; i += 4) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 18) |
-      (revLookup[b64.charCodeAt(i + 1)] << 12) |
-      (revLookup[b64.charCodeAt(i + 2)] << 6) |
-      revLookup[b64.charCodeAt(i + 3)]
-    arr[curByte++] = (tmp >> 16) & 0xFF
-    arr[curByte++] = (tmp >> 8) & 0xFF
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  if (placeHoldersLen === 2) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 2) |
-      (revLookup[b64.charCodeAt(i + 1)] >> 4)
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  if (placeHoldersLen === 1) {
-    tmp =
-      (revLookup[b64.charCodeAt(i)] << 10) |
-      (revLookup[b64.charCodeAt(i + 1)] << 4) |
-      (revLookup[b64.charCodeAt(i + 2)] >> 2)
-    arr[curByte++] = (tmp >> 8) & 0xFF
-    arr[curByte++] = tmp & 0xFF
-  }
-
-  return arr
-}
-
-function tripletToBase64 (num) {
-  return lookup[num >> 18 & 0x3F] +
-    lookup[num >> 12 & 0x3F] +
-    lookup[num >> 6 & 0x3F] +
-    lookup[num & 0x3F]
-}
-
-function encodeChunk (uint8, start, end) {
-  var tmp
-  var output = []
-  for (var i = start; i < end; i += 3) {
-    tmp =
-      ((uint8[i] << 16) & 0xFF0000) +
-      ((uint8[i + 1] << 8) & 0xFF00) +
-      (uint8[i + 2] & 0xFF)
-    output.push(tripletToBase64(tmp))
-  }
-  return output.join('')
-}
-
-function fromByteArray (uint8) {
-  var tmp
-  var len = uint8.length
-  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
-  var parts = []
-  var maxChunkLength = 16383 // must be multiple of 3
-
-  // go through the array every three bytes, we'll deal with trailing stuff later
-  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
-    parts.push(encodeChunk(
-      uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)
-    ))
-  }
-
-  // pad the end with zeros, but make sure to not forget the extra bytes
-  if (extraBytes === 1) {
-    tmp = uint8[len - 1]
-    parts.push(
-      lookup[tmp >> 2] +
-      lookup[(tmp << 4) & 0x3F] +
-      '=='
-    )
-  } else if (extraBytes === 2) {
-    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
-    parts.push(
-      lookup[tmp >> 10] +
-      lookup[(tmp >> 4) & 0x3F] +
-      lookup[(tmp << 2) & 0x3F] +
-      '='
-    )
-  }
-
-  return parts.join('')
-}
-
-},{}],10:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
@@ -5158,7 +4566,7 @@ function numberIsNaN (obj) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"base64-js":9,"buffer":10,"ieee754":11}],11:[function(require,module,exports){
+},{"base64-js":7,"buffer":9,"ieee754":10}],10:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -5243,6 +4651,98 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 
   buffer[offset + i - d] |= s * 128
 }
+
+},{}],11:[function(require,module,exports){
+/*
+object-assign
+(c) Sindre Sorhus
+@license MIT
+*/
+
+'use strict';
+/* eslint-disable no-unused-vars */
+var getOwnPropertySymbols = Object.getOwnPropertySymbols;
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+var propIsEnumerable = Object.prototype.propertyIsEnumerable;
+
+function toObject(val) {
+	if (val === null || val === undefined) {
+		throw new TypeError('Object.assign cannot be called with null or undefined');
+	}
+
+	return Object(val);
+}
+
+function shouldUseNative() {
+	try {
+		if (!Object.assign) {
+			return false;
+		}
+
+		// Detect buggy property enumeration order in older V8 versions.
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
+		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
+		test1[5] = 'de';
+		if (Object.getOwnPropertyNames(test1)[0] === '5') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test2 = {};
+		for (var i = 0; i < 10; i++) {
+			test2['_' + String.fromCharCode(i)] = i;
+		}
+		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
+			return test2[n];
+		});
+		if (order2.join('') !== '0123456789') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test3 = {};
+		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
+			test3[letter] = letter;
+		});
+		if (Object.keys(Object.assign({}, test3)).join('') !==
+				'abcdefghijklmnopqrst') {
+			return false;
+		}
+
+		return true;
+	} catch (err) {
+		// We don't expect any of the above to throw, but better to be safe.
+		return false;
+	}
+}
+
+module.exports = shouldUseNative() ? Object.assign : function (target, source) {
+	var from;
+	var to = toObject(target);
+	var symbols;
+
+	for (var s = 1; s < arguments.length; s++) {
+		from = Object(arguments[s]);
+
+		for (var key in from) {
+			if (hasOwnProperty.call(from, key)) {
+				to[key] = from[key];
+			}
+		}
+
+		if (getOwnPropertySymbols) {
+			symbols = getOwnPropertySymbols(from);
+			for (var i = 0; i < symbols.length; i++) {
+				if (propIsEnumerable.call(from, symbols[i])) {
+					to[symbols[i]] = from[symbols[i]];
+				}
+			}
+		}
+	}
+
+	return to;
+};
 
 },{}],12:[function(require,module,exports){
 // shim for using process in browser
@@ -5430,4 +4930,616 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[2]);
+},{}],13:[function(require,module,exports){
+(function (process){
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of websnark (Web Assembly zkSnark Prover).
+
+    websnark is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    websnark is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with websnark. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/* globals WebAssembly, Blob, Worker, navigator, Promise, window */
+const bigInt = require("big-integer");
+const groth16_wasm = require("../build/groth16_wasm.js");
+const assert = require("assert");
+
+const inBrowser = (typeof window !== "undefined");
+let NodeWorker;
+let NodeCrypto;
+if (!inBrowser) {
+    NodeWorker = require("worker_threads").Worker;
+    NodeCrypto = require("crypto");
+}
+
+
+class Deferred {
+    constructor() {
+        this.promise = new Promise((resolve, reject)=> {
+            this.reject = reject;
+            this.resolve = resolve;
+        });
+    }
+}
+
+/*
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+*/
+
+function thread(self) {
+    let instance;
+    let memory;
+    let i32;
+
+    async function init(data) {
+        const code = new Uint8Array(data.code);
+        const wasmModule = await WebAssembly.compile(code);
+        memory = new WebAssembly.Memory({initial:data.init});
+        i32 = new Uint32Array(memory.buffer);
+
+        instance = await WebAssembly.instantiate(wasmModule, {
+            env: {
+                "memory": memory
+            }
+        });
+    }
+
+    function alloc(length) {
+        while (i32[0] & 3) i32[0]++;  // Return always aligned pointers
+        const res = i32[0];
+        i32[0] += length;
+        while (i32[0] > memory.buffer.byteLength) {
+          memory.grow(100);
+        }
+        i32 = new Uint32Array(memory.buffer);
+        return res;
+    }
+
+    function putBin(b) {
+        const p = alloc(b.byteLength);
+        const s32 = new Uint32Array(b);
+        i32.set(s32, p/4);
+        return p;
+    }
+
+    function getBin(p, l) {
+        return memory.buffer.slice(p, p+l);
+    }
+
+    self.onmessage = function(e) {
+        let data;
+        if (e.data) {
+            data = e.data;
+        } else {
+            data = e;
+        }
+
+        if (data.command == "INIT") {
+            init(data).then(function() {
+                self.postMessage(data.result);
+            });
+        } else if (data.command == "G1_MULTIEXP") {
+
+            const oldAlloc = i32[0];
+            const pScalars = putBin(data.scalars);
+            const pPoints = putBin(data.points);
+            const pRes = alloc(96);
+            instance.exports.g1_zero(pRes);
+            instance.exports.g1_multiexp2(pScalars, pPoints, data.n, 7, pRes);
+
+            data.result = getBin(pRes, 96);
+            i32[0] = oldAlloc;
+            self.postMessage(data.result, [data.result]);
+        } else if (data.command == "G2_MULTIEXP") {
+
+            const oldAlloc = i32[0];
+            const pScalars = putBin(data.scalars);
+            const pPoints = putBin(data.points);
+            const pRes = alloc(192);
+            instance.exports.g2_zero(pRes);
+            instance.exports.g2_multiexp(pScalars, pPoints, data.n, 7, pRes);
+
+            data.result = getBin(pRes, 192);
+            i32[0] = oldAlloc;
+            self.postMessage(data.result, [data.result]);
+        } else if (data.command == "CALC_H") {
+            const oldAlloc = i32[0];
+            const pSignals = putBin(data.signals);
+            const pPolsA = putBin(data.polsA);
+            const pPolsB = putBin(data.polsB);
+            const nSignals = data.nSignals;
+            const domainSize = data.domainSize;
+            const pSignalsM = alloc(nSignals*32);
+            const pPolA = alloc(domainSize*32);
+            const pPolB = alloc(domainSize*32);
+            const pPolA2 = alloc(domainSize*32*2);
+            const pPolB2 = alloc(domainSize*32*2);
+
+            instance.exports.fft_toMontgomeryN(pSignals, pSignalsM, nSignals);
+
+            instance.exports.pol_zero(pPolA, domainSize);
+            instance.exports.pol_zero(pPolB, domainSize);
+
+            instance.exports.pol_constructLC(pPolsA, pSignalsM, nSignals, pPolA);
+            instance.exports.pol_constructLC(pPolsB, pSignalsM, nSignals, pPolB);
+
+            instance.exports.fft_copyNInterleaved(pPolA, pPolA2, domainSize);
+            instance.exports.fft_copyNInterleaved(pPolB, pPolB2, domainSize);
+
+            instance.exports.fft_ifft(pPolA, domainSize, 0);
+            instance.exports.fft_ifft(pPolB, domainSize, 0);
+            instance.exports.fft_fft(pPolA, domainSize, 1);
+            instance.exports.fft_fft(pPolB, domainSize, 1);
+
+            instance.exports.fft_copyNInterleaved(pPolA, pPolA2+32, domainSize);
+            instance.exports.fft_copyNInterleaved(pPolB, pPolB2+32, domainSize);
+
+            instance.exports.fft_mulN(pPolA2, pPolB2, domainSize*2, pPolA2);
+
+            instance.exports.fft_ifft(pPolA2, domainSize*2, 0);
+
+            instance.exports.fft_fromMontgomeryN(pPolA2+domainSize*32, pPolA2+domainSize*32, domainSize);
+
+            data.result = getBin(pPolA2+domainSize*32, domainSize*32);
+            i32[0] = oldAlloc;
+            self.postMessage(data.result, [data.result]);
+        } else if (data.command == "TERMINATE") {
+            process.exit();
+        }
+    };
+}
+
+async function build() {
+
+    const groth16 = new Groth16();
+
+    groth16.q = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
+    groth16.r = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+    groth16.n64 = Math.floor((groth16.q.minus(1).bitLength() - 1)/64) +1;
+    groth16.n32 = groth16.n64*2;
+    groth16.n8 = groth16.n64*8;
+
+    groth16.memory = new WebAssembly.Memory({initial:10000});
+    groth16.i32 = new Uint32Array(groth16.memory.buffer);
+
+    const wasmModule = await WebAssembly.compile(groth16_wasm.code);
+
+    groth16.instance = await WebAssembly.instantiate(wasmModule, {
+        env: {
+            "memory": groth16.memory
+        }
+    });
+
+    groth16.pq = groth16_wasm.pq;
+    groth16.pr = groth16_wasm.pr;
+
+    groth16.pr0 = groth16.alloc(192);
+    groth16.pr1 = groth16.alloc(192);
+
+    groth16.workers = [];
+    groth16.pendingDeferreds = [];
+    groth16.working = [];
+
+    let concurrency;
+
+    if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
+        concurrency = navigator.hardwareConcurrency;
+    } else {
+        concurrency = 8;
+    }
+
+    function getOnMsg(i) {
+        return function(e) {
+            let data;
+            if ((e)&&(e.data)) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            groth16.working[i]=false;
+            groth16.pendingDeferreds[i].resolve(data);
+            groth16.processWorks();
+        };
+    }
+
+    for (let i = 0; i<concurrency; i++) {
+
+        if (inBrowser) {
+            const blob = new Blob(["(", thread.toString(), ")(self);"], { type: "text/javascript" });
+            const url = URL.createObjectURL(blob);
+
+            groth16.workers[i] = new Worker(url);
+
+            groth16.workers[i].onmessage = getOnMsg(i);
+
+        } else {
+            groth16.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
+
+            groth16.workers[i].on("message", getOnMsg(i));
+        }
+
+        groth16.working[i]=false;
+    }
+
+    const initPromises = [];
+    for (let i=0; i<groth16.workers.length;i++) {
+        const copyCode = groth16_wasm.code.buffer.slice(0);
+        initPromises.push(groth16.postAction(i, {
+            command: "INIT",
+            init: 10000,
+            code: copyCode
+
+        }, [copyCode]));
+    }
+
+    await Promise.all(initPromises);
+
+    return groth16;
+}
+
+class Groth16 {
+    constructor() {
+        this.actionQueue = [];
+    }
+
+    postAction(workerId, e, transfers, _deferred) {
+        assert(this.working[workerId] == false);
+        this.working[workerId] = true;
+
+        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
+        this.workers[workerId].postMessage(e, transfers);
+
+        return this.pendingDeferreds[workerId].promise;
+    }
+
+    processWorks() {
+        for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
+            if (this.working[i] == false) {
+                const work = this.actionQueue.shift();
+                this.postAction(i, work.data, work.transfers, work.deferred);
+            }
+        }
+    }
+
+    queueAction(actionData, transfers) {
+        const d = new Deferred();
+        this.actionQueue.push({
+            data: actionData,
+            transfers: transfers,
+            deferred: d
+        });
+        this.processWorks();
+        return d.promise;
+    }
+
+    alloc(length) {
+        while (this.i32[0] & 3) this.i32[0]++;  // Return always aligned pointers
+        const res = this.i32[0];
+        this.i32[0] += length;
+        return res;
+    }
+
+
+    putBin(p, b) {
+        const s32 = new Uint32Array(b);
+        this.i32.set(s32, p/4);
+    }
+
+    getBin(p, l) {
+        return this.memory.buffer.slice(p, p+l);
+    }
+
+    bin2int(b) {
+        const i32 = new Uint32Array(b);
+        let acc = bigInt(i32[7]);
+        for (let i=6; i>=0; i--) {
+            acc = acc.shiftLeft(32);
+            acc = acc.add(i32[i]);
+        }
+        return acc.toString();
+    }
+
+    bin2g1(b) {
+        return [
+            this.bin2int(b.slice(0,32)),
+            this.bin2int(b.slice(32,64)),
+            this.bin2int(b.slice(64,96)),
+        ];
+    }
+    bin2g2(b) {
+        return [
+            [
+                this.bin2int(b.slice(0,32)),
+                this.bin2int(b.slice(32,64))
+            ],
+            [
+                this.bin2int(b.slice(64,96)),
+                this.bin2int(b.slice(96,128))
+            ],
+            [
+                this.bin2int(b.slice(128,160)),
+                this.bin2int(b.slice(160,192))
+            ],
+        ];
+    }
+
+    async g1_multiexp(scalars, points) {
+        const nPoints = scalars.byteLength /32;
+        const nPointsPerThread = Math.floor(nPoints / this.workers.length);
+        const opPromises = [];
+        for (let i=0; i<this.workers.length; i++) {
+            const th_nPoints =
+                i < this.workers.length -1 ?
+                    nPointsPerThread :
+                    nPoints - (nPointsPerThread * (this.workers.length -1));
+            const scalars_th = scalars.slice(i*nPointsPerThread*32, i*nPointsPerThread*32 + th_nPoints*32);
+            const points_th = points.slice(i*nPointsPerThread*64, i*nPointsPerThread*64 + th_nPoints*64);
+            opPromises.push(
+                this.queueAction({
+                    command: "G1_MULTIEXP",
+                    scalars: scalars_th,
+                    points: points_th,
+                    n: th_nPoints
+                }, [scalars_th, points_th])
+            );
+        }
+
+        const results = await Promise.all(opPromises);
+
+        this.instance.exports.g1_zero(this.pr0);
+        for (let i=0; i<results.length; i++) {
+            this.putBin(this.pr1, results[i]);
+            this.instance.exports.g1_add(this.pr0, this.pr1, this.pr0);
+        }
+
+        return this.getBin(this.pr0, 96);
+    }
+
+    async g2_multiexp(scalars, points) {
+        const nPoints = scalars.byteLength /32;
+        const nPointsPerThread = Math.floor(nPoints / this.workers.length);
+        const opPromises = [];
+        for (let i=0; i<this.workers.length; i++) {
+            const th_nPoints =
+                i < this.workers.length -1 ?
+                    nPointsPerThread :
+                    nPoints - (nPointsPerThread * (this.workers.length -1));
+            const scalars_th = scalars.slice(i*nPointsPerThread*32, i*nPointsPerThread*32 + th_nPoints*32);
+            const points_th = points.slice(i*nPointsPerThread*128, i*nPointsPerThread*128 + th_nPoints*128);
+            opPromises.push(
+                this.queueAction({
+                    command: "G2_MULTIEXP",
+                    scalars: scalars_th,
+                    points: points_th,
+                    n: th_nPoints
+                }, [scalars_th, points_th])
+            );
+        }
+
+        const results = await Promise.all(opPromises);
+
+        this.instance.exports.g2_zero(this.pr0);
+        for (let i=0; i<results.length; i++) {
+            this.putBin(this.pr1, results[i]);
+            this.instance.exports.g2_add(this.pr0, this.pr1, this.pr0);
+        }
+
+        return this.getBin(this.pr0, 192);
+    }
+
+    g1_affine(p) {
+        this.putBin(this.pr0, p);
+        this.instance.exports.g1_affine(this.pr0, this.pr0);
+        return this.getBin(this.pr0, 96);
+    }
+
+    g2_affine(p) {
+        this.putBin(this.pr0, p);
+        this.instance.exports.g2_affine(this.pr0, this.pr0);
+        return this.getBin(this.pr0, 192);
+    }
+
+    g1_fromMontgomery(p) {
+        this.putBin(this.pr0, p);
+        this.instance.exports.g1_fromMontgomery(this.pr0, this.pr0);
+        return this.getBin(this.pr0, 96);
+    }
+
+    g2_fromMontgomery(p) {
+        this.putBin(this.pr0, p);
+        this.instance.exports.g2_fromMontgomery(this.pr0, this.pr0);
+        return this.getBin(this.pr0, 192);
+    }
+
+    loadPoint1(b) {
+        const p = this.alloc(96);
+        this.putBin(p, b);
+        this.instance.exports.f1m_one(p+64);
+        return p;
+    }
+
+    loadPoint2(b) {
+        const p = this.alloc(192);
+        this.putBin(p, b);
+        this.instance.exports.f2m_one(p+128);
+        return p;
+    }
+
+    terminate() {
+        for (let i=0; i<this.workers.length; i++) {
+            this.workers[i].postMessage({command: "TERMINATE"});
+        }
+    }
+
+
+    async calcH(signals, polsA, polsB, nSignals, domainSize) {
+        return this.queueAction({
+            command: "CALC_H",
+            signals: signals,
+            polsA: polsA,
+            polsB: polsB,
+            nSignals: nSignals,
+            domainSize: domainSize
+        }, [signals, polsA, polsB]);
+    }
+
+    async proof(signals, pkey) {
+        const pkey32 = new Uint32Array(pkey);
+        const nSignals = pkey32[0];
+        const nPublic = pkey32[1];
+        const domainSize = pkey32[2];
+        const pPolsA = pkey32[3];
+        const pPolsB = pkey32[4];
+        const pPointsA = pkey32[5];
+        const pPointsB1 = pkey32[6];
+        const pPointsB2 = pkey32[7];
+        const pPointsC = pkey32[8];
+        const pHExps = pkey32[9];
+        const polsA = pkey.slice(pPolsA, pPolsA + pPolsB);
+        const polsB = pkey.slice(pPolsB, pPolsB + pPointsA);
+        const pointsA = pkey.slice(pPointsA, pPointsA + nSignals*64);
+        const pointsB1 = pkey.slice(pPointsB1, pPointsB1 + nSignals*64);
+        const pointsB2 = pkey.slice(pPointsB2, pPointsB2 + nSignals*128);
+        const pointsC = pkey.slice(pPointsC, pPointsC + (nSignals-nPublic-1)*64);
+        const pointsHExps = pkey.slice(pHExps, pHExps + domainSize*64);
+
+        const alfa1 = pkey.slice(10*4, 10*4 + 64);
+        const beta1 = pkey.slice(10*4 + 64, 10*4 + 128);
+        const delta1 = pkey.slice(10*4 + 128, 10*4 + 192);
+        const beta2 = pkey.slice(10*4 + 192, 10*4 + 320);
+        const delta2 = pkey.slice(10*4 + 320, 10*4 + 448);
+
+
+        const pH = this.calcH(signals.slice(0), polsA, polsB, nSignals, domainSize).then( (h) => {
+/* Debug code to print the result of h
+            for (let i=0; i<domainSize; i++) {
+                const a = this.bin2int(h.slice(i*32, i*32+32));
+                console.log(i + " -> " + a.toString());
+            }
+*/
+            return this.g1_multiexp(h, pointsHExps);
+        });
+
+        const pA = this.g1_multiexp(signals.slice(0), pointsA);
+        const pB1 = this.g1_multiexp(signals.slice(0), pointsB1);
+        const pB2 = this.g2_multiexp(signals.slice(0), pointsB2);
+        const pC = this.g1_multiexp(signals.slice((nPublic+1)*32), pointsC);
+
+        const res = await Promise.all([pA, pB1, pB2, pC, pH]);
+
+        const pi_a = this.alloc(96);
+        const pi_b = this.alloc(192);
+        const pi_c = this.alloc(96);
+        const pib1 = this.alloc(96);
+
+
+        this.putBin(pi_a, res[0]);
+        this.putBin(pib1, res[1]);
+        this.putBin(pi_b, res[2]);
+        this.putBin(pi_c, res[3]);
+
+        const pAlfa1 = this.loadPoint1(alfa1);
+        const pBeta1 = this.loadPoint1(beta1);
+        const pDelta1 = this.loadPoint1(delta1);
+        const pBeta2 = this.loadPoint2(beta2);
+        const pDelta2 = this.loadPoint2(delta2);
+
+
+        let rnd = new Uint32Array(8);
+
+        const aux1 = this.alloc(96);
+        const aux2 = this.alloc(192);
+
+        const pr = this.alloc(32);
+        const ps = this.alloc(32);
+
+        if (inBrowser) {
+            window.crypto.getRandomValues(rnd);
+            this.putBin(pr, rnd);
+
+            window.crypto.getRandomValues(rnd);
+            this.putBin(ps, rnd);
+        } else {
+            const br = NodeCrypto.randomBytes(32);
+            this.putBin(pr, br);
+            const bs = NodeCrypto.randomBytes(32);
+            this.putBin(ps, bs);
+        }
+
+/// Uncoment it to debug and check it works
+//        this.instance.exports.f1m_zero(pr);
+//        this.instance.exports.f1m_zero(ps);
+
+        // pi_a = pi_a + Alfa1 + r*Delta1
+        this.instance.exports.g1_add(pAlfa1, pi_a, pi_a);
+        this.instance.exports.g1_timesScalar(pDelta1, pr, 32, aux1);
+        this.instance.exports.g1_add(aux1, pi_a, pi_a);
+
+        // pi_b = pi_b + Beta2 + s*Delta2
+        this.instance.exports.g2_add(pBeta2, pi_b, pi_b);
+        this.instance.exports.g2_timesScalar(pDelta2, ps, 32, aux2);
+        this.instance.exports.g2_add(aux2, pi_b, pi_b);
+
+        // pib1 = pib1 + Beta1 + s*Delta1
+        this.instance.exports.g1_add(pBeta1, pib1, pib1);
+        this.instance.exports.g1_timesScalar(pDelta1, ps, 32, aux1);
+        this.instance.exports.g1_add(aux1, pib1, pib1);
+
+
+        // pi_c = pi_c + pH
+        this.putBin(aux1, res[4]);
+        this.instance.exports.g1_add(aux1, pi_c, pi_c);
+
+
+        // pi_c = pi_c + s*pi_a
+        this.instance.exports.g1_timesScalar(pi_a, ps, 32, aux1);
+        this.instance.exports.g1_add(aux1, pi_c, pi_c);
+
+        // pi_c = pi_c + r*pib1
+        this.instance.exports.g1_timesScalar(pib1, pr, 32, aux1);
+        this.instance.exports.g1_add(aux1, pi_c, pi_c);
+
+        // pi_c = pi_c - r*s*delta1
+        const prs = this.alloc(64);
+        this.instance.exports.int_mul(pr, ps, prs);
+        this.instance.exports.g1_timesScalar(pDelta1, prs, 64, aux1);
+        this.instance.exports.g1_neg(aux1, aux1);
+        this.instance.exports.g1_add(aux1, pi_c, pi_c);
+
+        this.instance.exports.g1_affine(pi_a, pi_a);
+        this.instance.exports.g2_affine(pi_b, pi_b);
+        this.instance.exports.g1_affine(pi_c, pi_c);
+
+        this.instance.exports.g1_fromMontgomery(pi_a, pi_a);
+        this.instance.exports.g2_fromMontgomery(pi_b, pi_b);
+        this.instance.exports.g1_fromMontgomery(pi_c, pi_c);
+
+        return {
+            pi_a: this.bin2g1(this.getBin(pi_a, 96)),
+            pi_b: this.bin2g2(this.getBin(pi_b, 192)),
+            pi_c: this.bin2g1(this.getBin(pi_c, 96)),
+        };
+
+    }
+
+}
+
+module.exports = build;
+
+}).call(this,require('_process'))
+},{"../build/groth16_wasm.js":1,"_process":12,"assert":3,"big-integer":8,"crypto":undefined,"worker_threads":undefined}]},{},[2]);

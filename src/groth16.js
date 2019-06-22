@@ -179,7 +179,7 @@ async function build() {
     groth16.n32 = groth16.n64*2;
     groth16.n8 = groth16.n64*8;
 
-    groth16.memory = new WebAssembly.Memory({initial:1000});
+    groth16.memory = new WebAssembly.Memory({initial:10000});
     groth16.i32 = new Uint32Array(groth16.memory.buffer);
 
     const wasmModule = await WebAssembly.compile(groth16_wasm.code);
@@ -247,7 +247,7 @@ async function build() {
         const copyCode = groth16_wasm.code.buffer.slice(0);
         initPromises.push(groth16.postAction(i, {
             command: "INIT",
-            init: 1000,
+            init: 10000,
             code: copyCode
 
         }, [copyCode]));
