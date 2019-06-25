@@ -1,6 +1,6 @@
 {
   "name": "websnark",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "big integer library to work in Zq",
   "main": "index.js",
   "scripts": {
