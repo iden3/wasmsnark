@@ -284,9 +284,106 @@ module.exports = function buildInt(module, n64, _prefix) {
 
     function buildMul() {
 
+        const f = module.addFunction(prefix+"_mul");
+        f.addParam("x", "i32");
+        f.addParam("y", "i32");
+        f.addParam("r", "i32");
+        f.addLocal("c0", "i64");
+        f.addLocal("c1", "i64");
+
+
+        for (let i=0;i<n32; i++) {
+            f.addLocal("x"+i, "i64");
+            f.addLocal("y"+i, "i64");
+        }
+
+        const c = f.getCodeBuilder();
+
+        const loadX = [];
+        const loadY = [];
+        function mulij(i, j) {
+            let X,Y;
+            if (!loadX[i]) {
+                X = c.teeLocal("x"+i, c.i64_load32_u( c.getLocal("x"), i*4));
+                loadX[i] = true;
+            } else {
+                X = c.getLocal("x"+i);
+            }
+            if (!loadY[j]) {
+                Y = c.teeLocal("y"+j, c.i64_load32_u( c.getLocal("y"), j*4));
+                loadY[j] = true;
+            } else {
+                Y = c.getLocal("y"+j);
+            }
+
+            return c.i64_mul( X, Y );
+        }
+
+        let c0 = "c0";
+        let c1 = "c1";
+
+        for (let k=0; k<n32*2-1; k++) {
+            for (let i=Math.max(0, k-n32+1); (i<=k)&&(i<n32); i++) {
+                const j= k-i;
+
+                f.addCode(
+                    c.setLocal(c0,
+                        c.i64_add(
+                            c.i64_and(
+                                c.getLocal(c0),
+                                c.i64_const(0xFFFFFFFF)
+                            ),
+                            mulij(i,j)
+                        )
+                    )
+                );
+
+                f.addCode(
+                    c.setLocal(c1,
+                        c.i64_add(
+                            c.getLocal(c1),
+                            c.i64_shr_u(
+                                c.getLocal(c0),
+                                c.i64_const(32)
+                            )
+                        )
+                    )
+                );
+
+            }
+            f.addCode(
+                c.i64_store32(
+                    c.getLocal("r"),
+                    k*4,
+                    c.getLocal(c0)
+                )
+            );
+            [c0, c1] = [c1, c0];
+            f.addCode(
+                c.setLocal(c1,
+                    c.i64_shr_u(
+                        c.getLocal(c0),
+                        c.i64_const(32)
+                    )
+                )
+            );
+        }
+        f.addCode(
+            c.i64_store32(
+                c.getLocal("r"),
+                n32*4*2-4,
+                c.getLocal(c0)
+            )
+        );
+
+    }
+
+
+    function buildMulOld() {
+
         const mulBuff = module.alloc(n32*n32*8);
 
-        const f = module.addFunction(prefix+"_mul");
+        const f = module.addFunction(prefix+"_mulOld");
         f.addParam("x", "i32");
         f.addParam("y", "i32");
         f.addParam("r", "i32");
@@ -843,6 +940,7 @@ module.exports = function buildInt(module, n64, _prefix) {
     buildAdd();
     buildSub();
     buildMul();
+    buildMulOld();
     buildDiv();
     buildInverseMod();
     module.exportFunction(prefix+"_copy");
@@ -853,6 +951,7 @@ module.exports = function buildInt(module, n64, _prefix) {
     module.exportFunction(prefix+"_gte");
     module.exportFunction(prefix+"_add");
     module.exportFunction(prefix+"_sub");
+    module.exportFunction(prefix+"_mulOld");
     module.exportFunction(prefix+"_mul");
     module.exportFunction(prefix+"_div");
     module.exportFunction(prefix+"_inverseMod");

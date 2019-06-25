@@ -4,49 +4,11 @@ const bigInt = require("big-integer");
 const buildProtoboard = require("../src/protoboard.js");
 const buildTomCook = require("../src/build_tomcook.js");
 const buildInt = require("../src/build_int.js");
+const buildTest = require("../src/build_test.js");
+
+const helpers = require("./helpers/helpers.js");
 
 
-function buildTest(module, fn) {
-    const f = module.addFunction("test_"+fn);
-    f.addParam("x", "i32");
-    f.addParam("y", "i32");
-    f.addParam("r", "i32");
-    f.addParam("n", "i32");
-    f.addLocal("i", "i32");
-
-    const c = f.getCodeBuilder();
-
-    f.addCode(c.setLocal("i", c.getLocal("n")));
-    f.addCode(c.block(c.loop(
-        c.call(fn, c.getLocal("x"),  c.getLocal("y"),  c.getLocal("r")),
-        c.setLocal("i", c.i32_sub(c.getLocal("i"), c.i32_const(1))),
-        c.br_if(1, c.i32_eqz ( c.getLocal("i") )),
-        c.br(0)
-    )));
-
-    module.exportFunction("test_"+fn);
-}
-
-function genValues(n, neg) {
-    const res = [];
-    res.push(bigInt.zero);
-    for (let i=0; i<n; i++) {
-        if (i>0) {
-            res.push( bigInt.one.shiftLeft(29*i).minus(1));
-        }
-        if (i<8) {
-            res.push( bigInt.one.shiftLeft(29*i));
-            res.push( bigInt.one.shiftLeft(29*i).add(1));
-        }
-    }
-
-    if (neg) {
-        const nt= res.length;
-        for (let i=0; i<nt; i++) res.push(bigInt.zero.minus(res[i]));
-    }
-
-    return res;
-}
 
 describe("Basic tests for Tom Cook Multiplication Strategy", () => {
     let pbTC;
@@ -67,7 +29,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         let c;
         const pA = pbTC.alloc(6*4);
 
-        const values = genValues(6, true);
+        const values = helpers.genValues(6, true, 29);
 
         for (let i=0; i<values.length; i++) {
             pbTC.set(pA, values[i], 24);
@@ -81,7 +43,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         let c;
         const pA = pbTC.alloc(6*4);
 
-        const values = genValues(6, true);
+        const values = helpers.genValues(6, true, 29);
 
         for (let i=0; i<values.length; i++) {
             pbTC.set(pA, values[i], 24);
@@ -96,7 +58,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         let c;
         const pA = pbTC.alloc(6*4);
 
-        const values = genValues(6, true);
+        const values = helpers.genValues(6, true, 29);
 
         for (let i=0; i<values.length; i++) {
             // console.log(values[i].toString(16));
@@ -114,7 +76,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         const pB = pbTC.alloc();
         const pC = pbTC.alloc(24);
 
-        const values = genValues(3, true);
+        const values = helpers.genValues(3, true, 29);
 
         for (let i=0; i<values.length; i++) {
             for (let j=0; j<values.length; j++) {
@@ -164,7 +126,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         const pB = pbTC.alloc(9*4);
         const pC = pbTC.alloc(9*4*2);
 
-        const values = genValues(9, false);
+        const values = helpers.genValues(9, false, 29);
 
         for (let i=0; i<values.length; i++) {
             for (let j=0; j<values.length; j++) {
@@ -186,6 +148,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         }
     });
 
+
     it("It should profile school", async () => {
         const A = bigInt.one.shiftLeft(254).minus(1);
         const B = bigInt.one.shiftLeft(254).minus(1);
@@ -195,7 +158,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         const pC = pbInt.alloc(64);
 
         const start = new Date().getTime();
-        pbInt.test_int_mul(pA, pB, pC, 100000000);
+        pbInt.test_int_mul(pA, pB, pC, 10000000);
         const end = new Date().getTime();
         const time = end - start;
 
@@ -225,7 +188,7 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
         // console.log("Mul1 Tom Cook Time (ms): " + time);
 
         start = new Date().getTime();
-        pbTC.test_tomcook_mul9(pA, pB, pC, 100000000);
+        pbTC.test_tomcook_mul9(pA, pB, pC, 10000000);
         end = new Date().getTime();
         time = end - start;
 

@@ -35,7 +35,17 @@ function calcProof() {
     });
 }
 
-function test() {
+function test(funcName, a, b, r, n) {
+
+    const start = new Date().getTime();
+    window.groth16.instance.exports[funcName](a,b,r, n);
+    const end = new Date().getTime();
+    const time = end - start;
+
+    console.log("Time (ms): " + time);
+}
+
+function test2() {
 
     const groth16 = window.groth16;
     const nSignals = 1;

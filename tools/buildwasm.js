@@ -4,10 +4,10 @@ const buildF1m = require("../src/build_f1m.js");
 const buildF2m = require("../src/build_f2m.js");
 const buildF1 = require("../src/build_f1.js");
 const buildCurve = require("../src/build_curve.js");
-const buildTest = require("../src/build_testg1");
 const buildFFT = require("../src/build_fft");
 const buildMultiexp = require("../src/build_multiexp");
 const buildPol = require("../src/build_pol");
+const buildTest = require("../src/build_test");
 const utils = require("../src/utils");
 const fs = require("fs");
 const path = require("path");
@@ -37,7 +37,8 @@ function buildWasm() {
     buildCurve(moduleBuilder, "g2", "f2m");
     buildMultiexp(moduleBuilder, "g2", "g2", "f2m", "fr");
 
-    buildTest(moduleBuilder);
+    buildTest(moduleBuilder, "int_mul");
+    buildTest(moduleBuilder, "int_mulOld");
 
     const code = moduleBuilder.build();
 
