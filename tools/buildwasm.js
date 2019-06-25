@@ -37,8 +37,8 @@ function buildWasm() {
     buildCurve(moduleBuilder, "g2", "f2m");
     buildMultiexp(moduleBuilder, "g2", "g2", "f2m", "fr");
 
-    buildTest(moduleBuilder, "int_mul");
-    buildTest(moduleBuilder, "int_mulOld");
+    buildTest(moduleBuilder, "f1m_mul");
+    buildTest(moduleBuilder, "f1m_mulOld");
 
     const code = moduleBuilder.build();
 

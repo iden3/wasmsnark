@@ -2,6 +2,9 @@ const assert = require("assert");
 const bigInt = require("big-integer");
 
 const buildF1 = require("../index.js").buildF1;
+const buildF1m = require("../src/build_f1m");
+const buildProtoboard = require("../src/protoboard.js");
+const buildTest = require("../src/build_test.js");
 
 describe("Basic tests for Zq", () => {
     it("It should do a basic addition", async () => {
@@ -482,4 +485,57 @@ describe("Basic tests for Zq", () => {
             assert(a.equals(v[i]));
         }
     });
+
+
+    it("It should profile int", async () => {
+
+        let start,end,time;
+
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const A=q.minus(1);
+        const B=q.minus(1).shiftRight(1);
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+            buildTest(module, "f1m_mul");
+            buildTest(module, "f1m_mulOld");
+        }, 32);
+
+        const pA = pbF1m.alloc();
+        const pB = pbF1m.alloc();
+        const pC = pbF1m.alloc();
+
+        pbF1m.set(pA, A);
+        pbF1m.f1m_toMontgomery(pA, pA);
+        pbF1m.set(pB, B);
+        pbF1m.f1m_toMontgomery(pB, pB);
+
+
+        start = new Date().getTime();
+        pbF1m.test_f1m_mul(pA, pB, pC, 50000000);
+        end = new Date().getTime();
+        time = end - start;
+
+        pbF1m.f1m_fromMontgomery(pC, pC);
+
+        const c1 = pbF1m.get(pC, 1, 32);
+        assert(c1.equals(A.times(B).mod(q)));
+
+        console.log("Mul Time (ms): " + time);
+
+        start = new Date().getTime();
+        pbF1m.test_f1m_mulOld(pA, pB, pC, 50000000);
+        end = new Date().getTime();
+        time = end - start;
+
+
+        pbF1m.f1m_fromMontgomery(pC, pC);
+
+        const c2 = pbF1m    .get(pC, 1, 32);
+        assert(c2.equals(A.times(B).mod(q)));
+
+        console.log("Mul Old Time (ms): " + time);
+
+    }).timeout(10000000);
+
 });
