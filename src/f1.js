@@ -19,7 +19,7 @@
 
 /* globals WebAssembly */
 const bigInt = require("big-integer");
-const ModuleBuilder = require("wasmbuilder");
+const ModuleBuilder = require("wasmbuilder").ModuleBuilder;
 const buildF1 = require("./build_f1.js");
 const buildTestF1 = require("./build_testf1.js");
 

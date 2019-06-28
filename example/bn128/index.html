@@ -1,0 +1,124 @@
+<html>
+<head>
+<script src="websnark_bn128.js"></script>
+<script>
+
+var witness;
+var provingKey;
+var verificationKey;
+var publicSignals;
+
+function onLoad() {
+
+    fetch("proving_key.bin").then( (response) => {
+        return response.arrayBuffer();
+    }).then( (b) => {
+        provingKey = b;
+    });
+
+    fetch("witness.bin").then( (response) => {
+        return response.arrayBuffer();
+    }).then( (b) => {
+        witness = b;
+    });
+
+    fetch("verification_key.json").then( (response) => {
+        return response.json();
+    }).then( (b) => {
+        verificationKey = b;
+    });
+
+    fetch("public.json").then( (response) => {
+        return response.json();
+    }).then( (b) => {
+        publicSignals = b;
+    });
+
+}
+
+function genProof() {
+    const start = new Date().getTime();
+    document.getElementById("time").innerHTML = "processing....";
+    document.getElementById("proof").value = "";
+
+    window.groth16GenProof(witness, provingKey).then((p)=> {
+        const end = new Date().getTime();
+        const time = end - start;
+        document.getElementById("time").innerHTML = `Time to compute: ${time}ms`;
+        document.getElementById("proof").value = JSON.stringify(p, null, 1);
+    });
+}
+
+
+function verify() {
+    const start = new Date().getTime();
+    document.getElementById("time").innerHTML = "processing....";
+    const proof = JSON.parse( document.getElementById("proof").value );
+
+    window.groth16Verify(verificationKey, publicSignals, proof).then((res)=> {
+        const end = new Date().getTime();
+        const time = end - start;
+        document.getElementById("time").innerHTML = `Time to compute: ${time}ms`;
+        document.getElementById("verify").innerHTML = (res === true) ? "GOOD" : "Verification failed";
+    });
+}
+
+function test(funcName, a, b, r, n) {
+
+    const start = new Date().getTime();
+    window.groth16.instance.exports[funcName](a,b,r, n);
+    const end = new Date().getTime();
+    const time = end - start;
+
+    console.log("Time (ms): " + time);
+}
+
+function test2() {
+
+    const groth16 = window.groth16;
+    const nSignals = 1;
+
+    const pkey32 = new Uint32Array(provingKey);
+    const pPointsA = pkey32[5];
+
+    const points = provingKey.slice(pPointsA, pPointsA + nSignals*64);
+    const signals = witness.slice(0, nSignals*32);
+
+    const pr1 = groth16.alloc(96);
+    const pPoints = groth16.alloc(points.byteLength);
+    groth16.putBin(pPoints, points);
+
+    const pSignals = groth16.alloc(signals.byteLength);
+    groth16.putBin(pSignals, signals);
+
+    groth16.instance.exports.g1_zero(pr1);
+    groth16.instance.exports.g1_multiexp(pSignals, pPoints, nSignals, 1, pr1);
+    groth16.instance.exports.g1_affine(pr1, pr1);
+    groth16.instance.exports.g1_fromMontgomery(pr1, pr1);
+
+    const r1 = groth16.bin2g1(groth16.getBin(pr1, 96));
+
+    groth16.instance.exports.g1_zero(pr1);
+    groth16.instance.exports.g1_multiexp2(pSignals, pPoints, nSignals, 1, pr1);
+    groth16.instance.exports.g1_affine(pr1, pr1);
+    groth16.instance.exports.g1_fromMontgomery(pr1, pr1);
+
+    const r2 = groth16.bin2g1(groth16.getBin(pr1, 96));
+
+    console.log(r1);
+    console.log(r2);
+}
+
+</script>
+</head>
+<body onLoad="onLoad()">
+<h1>iden3</h1>
+<h2>Zero knowledge proof generator</h2>
+<button onClick="genProof()">Generate Proof</button>
+<button onClick="verify()">Verify</button>
+<div id="time"></div>
+<pre id="verify"></pre>
+<textarea rows=50 cols=120  id="proof"></textarea>
+
+</body>
+</html>

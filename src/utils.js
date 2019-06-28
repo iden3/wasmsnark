@@ -38,3 +38,14 @@ exports.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
     }
     return b;
 };
+
+exports.isOcamNum = function(a) {
+    if (!Array.isArray(a)) return false;
+    if (a.length != 3) return false;
+    if (typeof a[0] !== "number") return false;
+    if (typeof a[1] !== "number") return false;
+    if (!Array.isArray(a[2])) return false;
+    return true;
+}
+
+

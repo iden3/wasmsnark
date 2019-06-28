@@ -1,9 +1,9 @@
 const assert = require("assert");
 const bigInt = require("big-integer");
 
-const buildProtoboard = require("../src/protoboard.js");
+const buildProtoboard = require("wasmbuilder").buildProtoboard;
 const buildInt = require("../src/build_int.js");
-const buildTest = require("../src/build_test.js");
+const buildTest2 = require("../src/build_test.js").buildTest2;
 
 const helpers = require("./helpers/helpers.js");
 
@@ -14,8 +14,8 @@ describe("Basic tests for Int", () => {
     before(async () => {
         pbInt = await buildProtoboard((module) => {
             buildInt(module, 4);
-            buildTest(module, "int_mul");
-            buildTest(module, "int_mulOld");
+            buildTest2(module, "int_mul");
+//            buildTest(module, "int_mulOld");
         }, 32);
     });
 
@@ -45,6 +45,25 @@ describe("Basic tests for Int", () => {
         }
     });
 
+
+    it("It should do a basic squaring", async () => {
+        let c;
+        const pA = pbInt.alloc();
+        const pC = pbInt.alloc(64);
+
+        const values = helpers.genValues(8, false);
+
+        for (let i=0; i<values.length; i++) {
+            pbInt.set(pA, values[i]);
+
+            pbInt.int_square(pA, pC);
+            c = pbInt.get(pC, 1, 64);
+
+            assert(c.equals(values[i].times(values[i])));
+
+        }
+    }).timeout(10000000);
+
     it("It should profile int", async () => {
 
         const pA = pbInt.alloc();
@@ -69,15 +88,15 @@ describe("Basic tests for Int", () => {
 
         console.log("Mul Time (ms): " + time);
 
-        start = new Date().getTime();
-        pbInt.test_int_mulOld(pA, pB, pC, 50000000);
-        end = new Date().getTime();
-        time = end - start;
+        // start = new Date().getTime();
+        // pbInt.test_int_mulOld(pA, pB, pC, 50000000);
+        // end = new Date().getTime();
+        // time = end - start;
 
-        const c2 = pbInt.get(pC, 1, 64);
-        assert(c2.equals(A.times(B)));
+        // const c2 = pbInt.get(pC, 1, 64);
+        // assert(c2.equals(A.times(B)));
 
-        console.log("Mul Old Time (ms): " + time);
+        // console.log("Mul Old Time (ms): " + time);
 
     }).timeout(10000000);
 

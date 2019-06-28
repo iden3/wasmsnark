@@ -94,8 +94,8 @@ class Protoboard {
     }
 
     get(pos, nElements, nBytes) {
-        if (typeof nBytes == undefined) {
-            if (typeof nElements == undefined) {
+        if (typeof nBytes == "undefined") {
+            if (typeof nElements == "undefined") {
                 nElements = 1;
                 nBytes = this.defBytes;
             } else {

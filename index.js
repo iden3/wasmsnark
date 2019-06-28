@@ -19,4 +19,4 @@
 
 module.exports.buildF1 = require("./src/f1.js");
 module.exports.buildBn128 = require("./src/bn128.js");
-module.exports.buildGroth16 = require("./src/groth16.js");
+module.exports.buildMnt6753 = require("./src/mnt6753.js");

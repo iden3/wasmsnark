@@ -1,13 +1,13 @@
 # websnark
 
-A fast zkSnark proof generator written in native Web Assembly.
+A fast zkSnark proof and verifier generator written in native Web Assembly.
 
-websnark is used to generate zkSnark Proofs from the browser.
+websnark is used to generate zkSnark Proofs and verify the from the browser.
 
 This module generates highly optimized Web Assembly modules for the low level
 cryptographic primitives.
 
-It also makes use of the Web Workers feature to parallelize the generation
+It also makes use of the Web Workers feature to parallelize the generation and verification
 of the zero knoledge proofs.
 
 The result is a fast library with times close to libsnarks but fully compatible for
@@ -15,10 +15,12 @@ browsers.
 
 ## Usage
 
-You just need to import the websnark.js found in the build directory.
+
+### BN128
+You just need to import the websnark_bn128.js found in the build directory.
 
 ```html
-<script src="websnark.js" />
+<script src="websnark_bn128.js" />
 ```
 
 This library has a single javascript function:
@@ -58,7 +60,7 @@ Here is a simple example of a web page that loads a key and a witness and genera
 <html>
 <header>
 </header>
-<script src="websnark.js"></script>
+<script src="websnark_bn128.js"></script>
 <script>
 
 var witness;
@@ -108,17 +110,21 @@ You can test it by running a web server on the example directory
 
 ```
 npm -g install http-server
-cd example
+cd example/bn128
 http-server .
 ```
 
 And then navegate to [http://127.0.0.1:8080](http://127.0.0.1:8080)
 
-The generated proof can be cut and pasted to `example/proof` and tested with snarkjs
+The generated proof can be cut and pasted to `example/bn128/proof.json` and tested with snarkjs
 
 ```
 snarkjs verify
-``
+```
+
+### MNT6753
+
+The directory `example/mnt6753` contains an example of the verifier.
 
 ## Building wasm.js
 

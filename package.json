@@ -6,7 +6,8 @@
   "scripts": {
     "test": "mocha --experimental-worker",
     "buildwasm": "node tools/buildwasm.js",
-    "build": "node tools/buildwasm.js; browserify main.js -o build/websnark.js --exclude worker_threads --exclude crypto; cp build/websnark.js example/websnark.js"
+    "build_bn128": "node tools/buildwasm_bn128.js; browserify main_bn128.js -o build/websnark_bn128.js --exclude worker_threads --exclude crypto; cp build/websnark_bn128.js example/bn128/websnark_bn128.js",
+    "build_mnt6753": "node tools/buildwasm_mnt6753.js; browserify main_mnt6753.js -o build/websnark_mnt6753.js --exclude worker_threads --exclude crypto; cp build/websnark_mnt6753.js example/mnt6753/websnark_mnt6753.js"
   },
   "keywords": [
     "bigint",
@@ -32,9 +33,10 @@
     "mocha": "^6.1.4",
     "package": "^1.0.1",
     "snarkjs": "^0.1.12",
-    "wasmbuilder": "0.0.3"
+    "wasmbuilder": "0.0.8"
   },
   "dependencies": {
-    "big-integer": "^1.6.42"
+    "big-integer": "^1.6.42",
+    "blakejs": "^1.1.0"
   }
 }

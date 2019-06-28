@@ -351,6 +351,7 @@ module.exports = function buildInt(module, n64, _prefix) {
                 );
 
             }
+
             f.addCode(
                 c.i64_store32(
                     c.getLocal("r"),
@@ -379,90 +380,212 @@ module.exports = function buildInt(module, n64, _prefix) {
     }
 
 
-    function buildMulOld() {
 
-        const mulBuff = module.alloc(n32*n32*8);
+    function buildSquare() {
 
-        const f = module.addFunction(prefix+"_mulOld");
+        const f = module.addFunction(prefix+"_square");
         f.addParam("x", "i32");
-        f.addParam("y", "i32");
         f.addParam("r", "i32");
-        f.addLocal("c", "i64");
+        f.addLocal("c0", "i64");
+        f.addLocal("c1", "i64");
+        f.addLocal("c0_old", "i64");
+        f.addLocal("c1_old", "i64");
+
+
+        for (let i=0;i<n32; i++) {
+            f.addLocal("x"+i, "i64");
+        }
 
         const c = f.getCodeBuilder();
 
-        for (let i=0; i<n32; i++) {
-            for (let j=0; j<n32; j++) {
-                f.addCode(c.i64_store(
-                    c.i32_const(mulBuff),
-                    (i*n32+j)*8,
-                    c.i64_mul(
-                        c.i64_load32_u( c.getLocal("x"), i*4),
-                        c.i64_load32_u( c.getLocal("y"), j*4)
-                    )
-                ));
+        const loadX = [];
+        function mulij(i, j) {
+            let X,Y;
+            if (!loadX[i]) {
+                X = c.teeLocal("x"+i, c.i64_load32_u( c.getLocal("x"), i*4));
+                loadX[i] = true;
+            } else {
+                X = c.getLocal("x"+i);
             }
+            if (!loadX[j]) {
+                Y = c.teeLocal("x"+j, c.i64_load32_u( c.getLocal("x"), j*4));
+                loadX[j] = true;
+            } else {
+                Y = c.getLocal("x"+j);
+            }
+
+            return c.i64_mul( X, Y );
         }
 
-        for (let i=0; i<n32; i++) {
-            f.addCode(c.i64_shr_u(c.getLocal("c"), c.i64_const(32)));
-            for (let j=0; j<i; j++) {
-                f.addCode(c.i64_add(
-                    [],
-                    c.i64_load32_u(
-                        c.i32_const(mulBuff),
-                        j*(n32*8) + i*8-4 - j*8
+        let c0 = "c0";
+        let c1 = "c1";
+        let c0_old = "c0_old";
+        let c1_old = "c1_old";
+
+        for (let k=0; k<n32*2-1; k++) {
+            f.addCode(
+                c.setLocal(c0, c.i64_const(0)),
+                c.setLocal(c1, c.i64_const(0)),
+            );
+
+            for (let i=Math.max(0, k-n32+1); (i<((k+1)>>1) )&&(i<n32); i++) {
+                const j= k-i;
+
+                f.addCode(
+                    c.setLocal(c0,
+                        c.i64_add(
+                            c.i64_and(
+                                c.getLocal(c0),
+                                c.i64_const(0xFFFFFFFF)
+                            ),
+                            mulij(i,j)
+                        )
                     )
-                ));
-            }
-            for (let j=0; j<i+1; j++) {
-                f.addCode(c.i64_add(
-                    [],
-                    c.i64_load32_u(
-                        c.i32_const(mulBuff),
-                        j*(n32*8) + i*8 - j*8
+                );
+
+                f.addCode(
+                    c.setLocal(c1,
+                        c.i64_add(
+                            c.getLocal(c1),
+                            c.i64_shr_u(
+                                c.getLocal(c0),
+                                c.i64_const(32)
+                            )
+                        )
                     )
-                ));
+                );
             }
-            f.addCode(c.setLocal("c", []));
+
+            // Multiply by 2
+            f.addCode(
+                c.setLocal(c0,
+                    c.i64_shl(
+                        c.i64_and(
+                            c.getLocal(c0),
+                            c.i64_const(0xFFFFFFFF)
+                        ),
+                        c.i64_const(1)
+                    )
+                )
+            );
+
+            f.addCode(
+                c.setLocal(c1,
+                    c.i64_add(
+                        c.i64_shl(
+                            c.getLocal(c1),
+                            c.i64_const(1)
+                        ),
+                        c.i64_shr_u(
+                            c.getLocal(c0),
+                            c.i64_const(32)
+                        )
+                    )
+                )
+            );
+
+            if (k%2 == 0) {
+                f.addCode(
+                    c.setLocal(c0,
+                        c.i64_add(
+                            c.i64_and(
+                                c.getLocal(c0),
+                                c.i64_const(0xFFFFFFFF)
+                            ),
+                            mulij(k>>1, k>>1)
+                        )
+                    )
+                );
+
+                f.addCode(
+                    c.setLocal(c1,
+                        c.i64_add(
+                            c.getLocal(c1),
+                            c.i64_shr_u(
+                                c.getLocal(c0),
+                                c.i64_const(32)
+                            )
+                        )
+                    )
+                );
+            }
+
+            // Add the old carry
+
+            if (k>0) {
+                f.addCode(
+                    c.setLocal(c0,
+                        c.i64_add(
+                            c.i64_and(
+                                c.getLocal(c0),
+                                c.i64_const(0xFFFFFFFF)
+                            ),
+                            c.i64_and(
+                                c.getLocal(c0_old),
+                                c.i64_const(0xFFFFFFFF)
+                            ),
+                        )
+                    )
+                );
+
+                f.addCode(
+                    c.setLocal(c1,
+                        c.i64_add(
+                            c.i64_add(
+                                c.getLocal(c1),
+                                c.i64_shr_u(
+                                    c.getLocal(c0),
+                                    c.i64_const(32)
+                                )
+                            ),
+                            c.getLocal(c1_old)
+                        )
+                    )
+                );
+            }
+
             f.addCode(
                 c.i64_store32(
                     c.getLocal("r"),
-                    i*4,
-                    c.getLocal("c")
+                    k*4,
+                    c.getLocal(c0)
                 )
             );
-        }
 
-        for (let i=0; i<n32; i++) {
-            f.addCode(c.i64_shr_u(c.getLocal("c"), c.i64_const(32)));
-            for (let j=i; j<n32; j++) {
-                f.addCode(c.i64_add(
-                    [],
-                    c.i64_load32_u(
-                        c.i32_const(mulBuff),
-                        j*(n32*8) + n32*8-4 + i*8- j*8
-                    )
-                ));
-            }
-            for (let j=i+1; j<n32; j++) {
-                f.addCode(c.i64_add(
-                    [],
-                    c.i64_load32_u(
-                        c.i32_const(mulBuff),
-                        j*(n32*8) + n32*8 + i*8 - j*8
-                    )
-                ));
-            }
-            f.addCode(c.setLocal("c", []));
             f.addCode(
-                c.i64_store32(
-                    c.getLocal("r"),
-                    i*4 + n32*4,
-                    c.getLocal("c")
+                c.setLocal(
+                    c0_old,
+                    c.getLocal(c1)
+                ),
+                c.setLocal(
+                    c1_old,
+                    c.i64_shr_u(
+                        c.getLocal(c0_old),
+                        c.i64_const(32)
+                    )
                 )
             );
+
         }
+        f.addCode(
+            c.i64_store32(
+                c.getLocal("r"),
+                n32*4*2-4,
+                c.getLocal(c0_old)
+            )
+        );
+
+    }
+
+
+    function buildSquareOld() {
+        const f = module.addFunction(prefix+"_squareOld");
+        f.addParam("x", "i32");
+        f.addParam("r", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(c.call(prefix + "_mul", c.getLocal("x"), c.getLocal("x"), c.getLocal("r")));
     }
 
     function _buildMul1() {
@@ -940,7 +1063,8 @@ module.exports = function buildInt(module, n64, _prefix) {
     buildAdd();
     buildSub();
     buildMul();
-    buildMulOld();
+    buildSquare();
+    buildSquareOld();
     buildDiv();
     buildInverseMod();
     module.exportFunction(prefix+"_copy");
@@ -951,8 +1075,9 @@ module.exports = function buildInt(module, n64, _prefix) {
     module.exportFunction(prefix+"_gte");
     module.exportFunction(prefix+"_add");
     module.exportFunction(prefix+"_sub");
-    module.exportFunction(prefix+"_mulOld");
     module.exportFunction(prefix+"_mul");
+    module.exportFunction(prefix+"_square");
+    module.exportFunction(prefix+"_squareOld");
     module.exportFunction(prefix+"_div");
     module.exportFunction(prefix+"_inverseMod");
 

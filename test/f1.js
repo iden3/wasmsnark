@@ -3,10 +3,12 @@ const bigInt = require("big-integer");
 
 const buildF1 = require("../index.js").buildF1;
 const buildF1m = require("../src/build_f1m");
-const buildProtoboard = require("../src/protoboard.js");
-const buildTest = require("../src/build_test.js");
+const buildProtoboard = require("wasmbuilder").buildProtoboard;
+const buildTest1 = require("../src/build_test.js").buildTest1;
+const buildTest2 = require("../src/build_test.js").buildTest2;
 
 describe("Basic tests for Zq", () => {
+
     it("It should do a basic addition", async () => {
         const f1 = await buildF1(101);
 
@@ -486,6 +488,235 @@ describe("Basic tests for Zq", () => {
         }
     });
 
+    it("It should square right", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const v= [
+            bigInt.zero,
+            bigInt.one,
+            q.minus(1),
+            q.minus(2),
+            q.minus(1).shiftRight(1),
+            q.minus(1).shiftRight(1).add(1),
+            q.minus(1).shiftRight(1).add(2),
+            q.minus(1).shiftRight(1).minus(1),
+            q.minus(1).shiftRight(1).minus(2),
+            bigInt(2),
+            bigInt("FFFFFFFFFFFFFFFFFFFF", 16),
+        ];
+
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+            buildTest2(module, "f1m_mul");
+            buildTest1(module, "f1m_square");
+        }, 32);
+
+        const pA = pbF1m.alloc();
+        const pC1 = pbF1m.alloc();
+        const pC2 = pbF1m.alloc();
+
+        for (let i=0; i<v.length; i++) {
+
+            pbF1m.set(pA, v[i]);
+            pbF1m.f1m_square(pA, pC1);
+            pbF1m.f1m_mul(pA, pA, pC2);
+
+            const c1 = pbF1m.get(pC1);
+            const c2 = pbF1m.get(pC2);
+
+            assert(c1.equals(c2));
+        }
+
+    });
+
+    it("It should isSquare", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const v= [
+            [0, true],
+            [bigInt.one, true],
+            [bigInt(2), true],
+            [bigInt(3), true],
+            [bigInt(4), true],
+            [bigInt(5), false],
+            [q.minus(1), true]
+        ];
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+            buildTest2(module, "f1m_mul");
+            buildTest1(module, "f1m_square");
+        }, 32);
+
+        const pA = pbF1m.alloc();
+
+        for (let i=0; i<v.length; i++) {
+
+            pbF1m.set(pA, v[i][0]);
+            pbF1m.f1m_toMontgomery(pA, pA);
+
+            const res = (pbF1m.f1m_isSquare(pA) === 1);
+            assert.equal(res, v[i][1]);
+        }
+
+    });
+
+    it("It should sqrt right", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const v= [
+            bigInt.zero,
+            bigInt.one,
+            q.minus(1),
+            q.minus(2),
+            q.minus(1).shiftRight(1),
+            q.minus(1).shiftRight(1).add(1),
+            q.minus(1).shiftRight(1).add(2),
+            q.minus(1).shiftRight(1).minus(1),
+            q.minus(1).shiftRight(1).minus(2),
+            bigInt(2),
+            bigInt("FFFFFFFFFFFFFFFFFFFF", 16),
+        ];
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+        }, 32);
+
+        const pA = pbF1m.alloc();
+        const pC = pbF1m.alloc();
+        const pD = pbF1m.alloc();
+
+        for (let i=0; i<v.length; i++) {
+            pbF1m.set(pA, v[i].times(v[i]).mod(q));
+            pbF1m.f1m_toMontgomery(pA, pA);
+            pbF1m.f1m_sqrt(pA, pC);
+            pbF1m.f1m_fromMontgomery(pC, pC);
+
+            const c = pbF1m.get(pC);
+            let expectedC;
+            if (v[i].isOdd()) {
+                expectedC = q.minus(v[i]);
+            } else {
+                expectedC = v[i];
+            }
+
+            assert(c.equals(expectedC));
+
+
+            pbF1m.set(pA, v[i]);
+            pbF1m.f1m_square(pA, pC);
+            pbF1m.f1m_sqrt(pC, pD);
+            pbF1m.f1m_square(pD, pD);
+            assert(pbF1m.f1m_eq(pC, pD));
+
+        }
+    });
+
+
+    it("It should Load", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+        }, 32);
+
+        function num(n) {
+            let acc = bigInt(0);
+            for (let i=0; i<n; i++) {
+                acc = acc.add( bigInt(i%256).shiftLeft(i*8)  );
+            }
+            return acc.mod(q);
+        }
+
+        const pSerie = pbF1m.alloc(256);
+        const pA = pbF1m.alloc();
+
+        for (let i=0; i<256; i++) pbF1m.i8[pSerie+i] = i;
+
+        for (let i=0; i<256; i++) {
+
+            pbF1m.f1m_load(pSerie, i, pA);
+
+            const c = pbF1m.get(pA);
+
+            assert(c.equals(num(i)));
+        }
+    });
+
+    it("It should timesScalar", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+        }, 32);
+
+        function num(n) {
+            let acc = bigInt(0);
+            for (let i=0; i<n; i++) {
+                acc = acc.add( bigInt(i%256).shiftLeft(i*8)  );
+            }
+            return acc.mod(q);
+        }
+
+        const pSerie = pbF1m.alloc(256);
+        const pA = pbF1m.alloc();
+
+        const base = bigInt("FFFFFFFFFFFFFFFFFFFF", 16);
+        const pBase = pbF1m.alloc();
+        pbF1m.set(pBase, base);
+        pbF1m.f1m_toMontgomery(pBase, pBase);
+
+
+        for (let i=0; i<256; i++) pbF1m.i8[pSerie+i] = i;
+
+        for (let i=0; i<256; i++) {
+
+            pbF1m.f1m_timesScalar(pBase, pSerie, i, pA);
+            pbF1m.f1m_fromMontgomery(pA, pA);
+
+            const c = pbF1m.get(pA);
+            const ref = base.times(num(i)).mod(q);
+
+            assert(c.equals(ref));
+        }
+    });
+
+    it("It should compare profiling square", async () => {
+
+        let start,end,time;
+
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        const A = bigInt("FFFFFFFFFFFFFFFFFFFF", 16);
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+            buildTest2(module, "f1m_mul");
+            buildTest1(module, "f1m_square");
+        }, 32);
+
+        const pA = pbF1m.alloc();
+        const pC = pbF1m.alloc();
+
+        pbF1m.set(pA, A);
+
+        start = new Date().getTime();
+        pbF1m.test_f1m_mul(pA, pA, pC, 50000000);
+        end = new Date().getTime();
+        time = end - start;
+
+        const c1 = pbF1m.get(pC);
+
+        console.log("Mul Time (ms): " + time);
+
+        start = new Date().getTime();
+        pbF1m.test_f1m_square(pA, pC, 50000000);
+        end = new Date().getTime();
+        time = end - start;
+
+        const c2 = pbF1m.get(pC);
+
+        console.log("Square Time (ms): " + time);
+
+        assert(c1.equals(c2));
+
+    }).timeout(10000000);
+
 
     it("It should profile int", async () => {
 
@@ -497,8 +728,8 @@ describe("Basic tests for Zq", () => {
 
         const pbF1m = await buildProtoboard((module) => {
             buildF1m(module, q);
-            buildTest(module, "f1m_mul");
-            buildTest(module, "f1m_mulOld");
+            buildTest2(module, "f1m_mul");
+//            buildTest(module, "f1m_mulOld");
         }, 32);
 
         const pA = pbF1m.alloc();
@@ -523,18 +754,18 @@ describe("Basic tests for Zq", () => {
 
         console.log("Mul Time (ms): " + time);
 
-        start = new Date().getTime();
-        pbF1m.test_f1m_mulOld(pA, pB, pC, 50000000);
-        end = new Date().getTime();
-        time = end - start;
-
-
-        pbF1m.f1m_fromMontgomery(pC, pC);
-
-        const c2 = pbF1m    .get(pC, 1, 32);
-        assert(c2.equals(A.times(B).mod(q)));
-
-        console.log("Mul Old Time (ms): " + time);
+        //        start = new Date().getTime();
+        //        pbF1m.test_f1m_mulOld(pA, pB, pC, 50000000);
+        //        end = new Date().getTime();
+        //        time = end - start;
+        //
+        //
+        //        pbF1m.f1m_fromMontgomery(pC, pC);
+        //
+        //        const c2 = pbF1m    .get(pC, 1, 32);
+        //        assert(c2.equals(A.times(B).mod(q)));
+        //
+        //        console.log("Mul Old Time (ms): " + time);
 
     }).timeout(10000000);
 

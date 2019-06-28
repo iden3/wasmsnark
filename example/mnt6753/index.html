@@ -1,0 +1,145 @@
+<html>
+  <head>
+    <script src='crypto_lib.js'></script>
+    <script src='verifier.js'></script>
+    <script src='websnark_mnt6753.js'></script>
+    <script type="text/javascript">
+/* globals window, document */
+
+var t;
+
+async function runTest() {
+    let tStart, tEnd, tTest, tRef, tSync, tAsync;
+    let res;
+
+    // Test vector generation
+    tStart = new Date().getTime();
+    t = window.generateTestCase();
+    tEnd = new Date().getTime();
+    tTest = tEnd - tStart;
+
+
+    // Reference Implementation
+    tStart = new Date().getTime();
+    res = window.ref_boweGabizonVerifier(t.verificationKey, t.input, t.proof);
+    tEnd = new Date().getTime();
+    tRef = tEnd - tStart;
+    if (!res) throw new Error("Reference implementation failed");
+
+    // Sync implementation
+    tStart = new Date().getTime();
+    res = window.boweGabizonVerifier(t.verificationKey, t.input, t.proof);
+    tEnd = new Date().getTime();
+    tSync = tEnd - tStart;
+    if (!res) throw new Error("Syncronow failed");
+
+    tStart = new Date().getTime();
+    res = await window.boweGabizonVerifierAsync(t.verificationKey, t.input, t.proof);
+    tEnd = new Date().getTime();
+    tAsync = tEnd - tStart;
+    if (!res) throw new Error("Asyncronow failed");
+
+    const S =  `
+Test Vector Generation: ${tTest}ms
+Reference Implementation: ${tRef}ms
+Sync Implementation: ${tSync}ms
+Async Implementation: ${tAsync}ms`;
+    console.log(S);
+    return S;
+}
+
+
+
+async function runTest2() {
+    let tStart, tEnd, tAsync;
+    let res;
+
+    if (!t) {
+        // Test vector generation
+        t = window.generateTestCase();
+    }
+
+    tStart = new Date().getTime();
+    res = await window.boweGabizonVerifierFusedAsync(t.verificationKey, t.input, t.proof);
+    tEnd = new Date().getTime();
+    tAsync = tEnd - tStart;
+    if (!res) throw new Error("Asyncronow failed");
+
+    const S =  `
+Async Implementation: ${tAsync}ms`;
+    console.log(S);
+    return S;
+}
+
+async function runTest3() {
+    let tStart, tEnd, tAsync;
+    let res;
+
+    if (!t) {
+        // Test vector generation
+        t = window.generateTestCase();
+    }
+
+    tStart = new Date().getTime();
+    res = await window.boweGabizonVerifierAsync(t.verificationKey, t.input, t.proof);
+    tEnd = new Date().getTime();
+    tAsync = tEnd - tStart;
+    if (!res) throw new Error("Asyncronow failed");
+
+    const S =  `
+Async Implementation: ${tAsync}ms`;
+    console.log(S);
+    return S;
+}
+
+function test() {
+    document.getElementById("state").innerHTML = "processing....";
+    document.getElementById("results").innerHTML = "";
+
+    setTimeout(() => {
+        runTest().then( (res) => {
+
+            document.getElementById("state").innerHTML = "";
+            document.getElementById("results").innerHTML = res;
+
+        });
+    }, 1);
+}
+
+function test2() {
+    document.getElementById("state").innerHTML = "processing....";
+    document.getElementById("results").innerHTML = "";
+
+    runTest2().then( (res) => {
+
+        document.getElementById("state").innerHTML = "";
+        document.getElementById("results").innerHTML = res;
+
+    });
+}
+
+function test3() {
+    document.getElementById("state").innerHTML = "processing....";
+    document.getElementById("results").innerHTML = "";
+
+    runTest3().then( (res) => {
+
+        document.getElementById("state").innerHTML = "";
+        document.getElementById("results").innerHTML = res;
+
+    });
+}
+
+    </script>
+  </head>
+  <body>
+    <h1>iden3</h1>
+    <h2>Zero knowledge proof verification</h2>
+    <button onClick="test()">All tests</button>
+    <button onClick="test2()">Async Verify Fused </button>
+    <button onClick="test3()">Async Verify Non Fused</button>
+    <div id="state"></div>
+    <pre id="results"></pre>
+
+  </body>
+</html>

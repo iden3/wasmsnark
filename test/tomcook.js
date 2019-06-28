@@ -1,10 +1,10 @@
 const assert = require("assert");
 const bigInt = require("big-integer");
 
-const buildProtoboard = require("../src/protoboard.js");
+const buildProtoboard = require("wasmbuilder").buildProtoboard;
 const buildTomCook = require("../src/build_tomcook.js");
 const buildInt = require("../src/build_int.js");
-const buildTest = require("../src/build_test.js");
+const buildTest2 = require("../src/build_test.js").buildTest2;
 
 const helpers = require("./helpers/helpers.js");
 
@@ -17,11 +17,11 @@ describe("Basic tests for Tom Cook Multiplication Strategy", () => {
     before(async () => {
         pbTC = await buildProtoboard((module) => {
             buildTomCook(module);
-            buildTest(module, "tomcook_mul9");
+            buildTest2(module, "tomcook_mul9");
         }, 12, 29);
         pbInt = await buildProtoboard((module) => {
             buildInt(module, 4);
-            buildTest(module, "int_mul");
+            buildTest2(module, "int_mul");
         }, 32);
     });
 

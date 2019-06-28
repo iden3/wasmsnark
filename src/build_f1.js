@@ -39,6 +39,7 @@ module.exports = function buildF1(module, _q, _prefix, _f1mPrefix, _intPrefix) {
 
     const pR2 =     module.modules[f1mPrefix].pR2;
     const pq =     module.modules[f1mPrefix].pq;
+    const pePlusOne = module.modules[f1mPrefix].pePlusOne;
 
     function buildMul() {
         const pAux1 = module.alloc(n8);
@@ -53,6 +54,17 @@ module.exports = function buildF1(module, _q, _prefix, _f1mPrefix, _intPrefix) {
         f.addCode(c.call(f1mPrefix + "_mul", c.i32_const(pAux1), c.i32_const(pR2), c.getLocal("r")));
     }
 
+    function buildSquare() {
+        const f = module.addFunction(prefix+"_square");
+        f.addParam("x", "i32");
+        f.addParam("r", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(c.call(prefix + "_mul", c.getLocal("x"), c.getLocal("x"), c.getLocal("r")));
+    }
+
+
     function buildInverse() {
 
         const f = module.addFunction(prefix+ "_inverse");
@@ -63,13 +75,30 @@ module.exports = function buildF1(module, _q, _prefix, _f1mPrefix, _intPrefix) {
         f.addCode(c.call(intPrefix + "_inverseMod", c.getLocal("x"), c.i32_const(pq), c.getLocal("r")));
     }
 
+    function buildIsNegative() {
+        const f = module.addFunction(prefix+"_isNegative");
+        f.addParam("x", "i32");
+        f.setReturnType("i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.call(intPrefix + "_gte", c.getLocal("x"), c.i32_const(pePlusOne) )
+        );
+    }
+
+
     buildMul();
+    buildSquare();
     buildInverse();
+    buildIsNegative();
     module.exportFunction(f1mPrefix + "_add", prefix + "_add");
     module.exportFunction(f1mPrefix + "_sub", prefix + "_sub");
     module.exportFunction(f1mPrefix + "_neg", prefix + "_neg");
     module.exportFunction(prefix + "_mul");
+    module.exportFunction(prefix + "_square");
     module.exportFunction(prefix + "_inverse");
+    module.exportFunction(prefix + "_isNegative");
     module.exportFunction(f1mPrefix + "_copy", prefix+"_copy");
     module.exportFunction(f1mPrefix + "_zero", prefix+"_zero");
     module.exportFunction(f1mPrefix + "_one", prefix+"_one");

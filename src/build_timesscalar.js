@@ -17,7 +17,7 @@
     along with websnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-module.exports = function buildTimesScalar(module, fnName, elementLen, opAB, opAA, fPrefix) {
+module.exports = function buildTimesScalar(module, fnName, elementLen, opAB, opAA, opCopy, opInit) {
 
     const f = module.addFunction(fnName);
     f.addParam("base", "i32");
@@ -31,9 +31,9 @@ module.exports = function buildTimesScalar(module, fnName, elementLen, opAB, opA
 
     const aux = c.i32_const(module.alloc(elementLen));
 
-    f.addCode(c.call(fPrefix + "_copy", c.getLocal("base"), aux));
+    f.addCode(c.call(opCopy, c.getLocal("base"), aux));
 
-    f.addCode(c.call(fPrefix + "_zero", c.getLocal("r")));
+    f.addCode(c.call(opInit, c.getLocal("r")));
 
     f.addCode(c.setLocal("i", c.getLocal("scalarLength")));
     f.addCode(c.block(c.loop(
