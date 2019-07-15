@@ -21,6 +21,8 @@ const bigInt = require("big-integer");
 const Circuit = require("snarkjs/src/circuit");
 const bigInt2 = require("snarkjs/src/bigint");
 const hexifyBigInts = require("../tools/stringifybigint").hexifyBigInts;
+const unhexifyBigInts = require("../tools/stringifybigint").unhexifyBigInts;
+const stringifyBigInts = require("../tools/stringifybigint").stringifyBigInts;
 const unstringifyBigInts = require("../tools/stringifybigint").unstringifyBigInts;
 const stringifyBigInts2 = require("snarkjs/src/stringifybigint").stringifyBigInts;
 const unstringifyBigInts2 = require("snarkjs/src/stringifybigint").unstringifyBigInts;
@@ -75,9 +77,22 @@ function toSolidityInput(proof) {
     return hexifyBigInts(unstringifyBigInts(result));
 }
 
+function fromSolidityInput(proof) {
+    proof = unhexifyBigInts(proof);
+    const result = {
+        pi_a: [proof.pi_a[0], proof.pi_a[1], bigInt(1)],
+        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]], [bigInt(1), bigInt(0)]],
+        pi_c: [proof.pi_c[0], proof.pi_c[1], bigInt(1)]
+    };
+    if (proof.publicSignals) {
+        result.publicSignals = proof.publicSignals;
+    }
+    return stringifyBigInts(proof);
+}
+
 function  genWitness(input, circuitJson) {
     const circuit = new Circuit(unstringifyBigInts2(circuitJson));
-    const witness = circuit.calculateWitness(input);
+    const witness = circuit.calculateWitness(unstringifyBigInts2(input));
     const publicSignals = witness.slice(1, circuit.nPubInputs + circuit.nOutputs + 1);
     return {witness, publicSignals};
 }
@@ -90,4 +105,4 @@ async function genWitnessAndProve(groth16, input, circuitJson, provingKey) {
     return result;
 }
 
-module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, genWitnessAndProve};
+module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, fromSolidityInput, genWitnessAndProve};

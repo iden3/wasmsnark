@@ -22,6 +22,7 @@ const bigInt = require("big-integer");
 module.exports.stringifyBigInts = stringifyBigInts;
 module.exports.unstringifyBigInts = unstringifyBigInts;
 module.exports.hexifyBigInts = hexifyBigInts;
+module.exports.unhexifyBigInts = unhexifyBigInts;
 
 function stringifyBigInts(o) {
     if ((typeof(o) == "bigint") || (o instanceof bigInt))  {
@@ -67,6 +68,22 @@ function hexifyBigInts(o) {
         const res = {};
         for (let k in o) {
             res[k] = hexifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function unhexifyBigInts(o) {
+    if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o)))  {
+        return bigInt(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unhexifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        for (let k in o) {
+            res[k] = unhexifyBigInts(o[k]);
         }
         return res;
     } else {
