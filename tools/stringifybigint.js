@@ -43,7 +43,7 @@ function unstringifyBigInts(o) {
         return bigInt(o);
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts);
-    } else if (typeof o == "object") {
+    } else if (typeof o == "object" && !(o instanceof bigInt)) {
         const res = {};
         for (let k in o) {
             res[k] = unstringifyBigInts(o[k]);
