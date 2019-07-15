@@ -28,16 +28,30 @@
 
 /* globals window */
 
-const buildGroth16 = require("./src/groth16.js");
+const buildGroth16 = require("./src/groth16");
+const utils = require("./src/utils");
 
-buildGroth16().then( (groth16) => {
+buildGroth16().then((groth16) => {
     window.groth16 = groth16;
-    window.genZKSnarkProof = function(witness, provingKey, cb) {
+    window.zkSnarkProofToSolidityInput = utils.toSolidityInput;
 
-        const p = groth16.proof(witness, provingKey);
-
+    window.genZKSnarkProofAndWitness = function (input, circuitJson, provingKey, cb) {
+        const p = utils.genWitnessAndProve(groth16, input, circuitJson, provingKey);
         if (cb) {
-            p.then( (proof) => {
+            p.then((proof) => {
+                cb(null, proof);
+            }, (err) => {
+                cb(err);
+            });
+        } else {
+            return p;
+        }
+    };
+
+    window.genZKSnarkProof = function (witness, provingKey, cb) {
+        const p = groth16.proof(witness, provingKey);
+        if (cb) {
+            p.then((proof) => {
                 cb(null, proof);
             }, (err) => {
                 cb(err);
@@ -47,10 +61,7 @@ buildGroth16().then( (groth16) => {
         }
     };
 });
-
-
-
-},{"./src/groth16.js":13}],3:[function(require,module,exports){
+},{"./src/groth16":17,"./src/utils":18}],3:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -4931,6 +4942,976 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],13:[function(require,module,exports){
+(function (Buffer){
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/* global BigInt */
+const bigInt = require("big-integer");
+
+let wBigInt;
+
+if (typeof(BigInt) != "undefined") {
+    wBigInt  = BigInt;
+    wBigInt.one = wBigInt(1);
+    wBigInt.zero = wBigInt(0);
+
+    // Affine
+    wBigInt.genAffine = (q) => {
+        const nq = -q;
+        return (a) => {
+            let aux = a;
+            if (aux < 0) {
+                if (aux <= nq) {
+                    aux = aux % q;
+                }
+                if (aux < wBigInt.zero) {
+                    aux = aux + q;
+                }
+            } else {
+                if (aux >= q) {
+                    aux = aux % q;
+                }
+            }
+            return aux.valueOf();
+        };
+    };
+
+
+    // Inverse
+    wBigInt.genInverse = (q) => {
+        return (a) => {
+            let t = wBigInt.zero;
+            let r = q;
+            let newt = wBigInt.one;
+            let newr = wBigInt.affine(a, q);
+            while (newr!=wBigInt.zero) {
+                let q = r/newr;
+                [t, newt] = [newt, t-q*newt];
+                [r, newr] = [newr, r-q*newr];
+            }
+            if (t<wBigInt.zero) t += q;
+            return t;
+        };
+    };
+
+
+    // Add
+    wBigInt.genAdd = (q) => {
+        if (q) {
+            return (a,b) => (a+b) % q;
+        } else {
+            return (a,b) => a+b;
+        }
+    };
+
+    // Sub
+    wBigInt.genSub = (q) => {
+        if (q) {
+            return (a,b) => (a-b) % q;
+        } else {
+            return (a,b) => a-b;
+        }
+    };
+
+
+    // Neg
+    wBigInt.genNeg = (q) => {
+        if (q) {
+            return (a) => (-a) % q;
+        } else {
+            return (a) => -a;
+        }
+    };
+
+    // Mul
+    wBigInt.genMul = (q) => {
+        if (q) {
+            return (a,b) => (a*b) % q;
+        } else {
+            return (a,b) => a*b;
+        }
+    };
+
+    // Shr
+    wBigInt.genShr = () => {
+        return (a,b) => a >> wBigInt(b);
+    };
+
+    // Shl
+    wBigInt.genShl = (q) => {
+        if (q) {
+            return (a,b) => (a << wBigInt(b)) % q;
+        } else {
+            return (a,b) => a << wBigInt(b);
+        }
+    };
+
+    // Equals
+    wBigInt.genEquals = (q) => {
+        if (q) {
+            return (a,b) => (a.affine(q) == b.affine(q));
+        } else {
+            return (a,b) => a == b;
+        }
+    };
+
+    // Square
+    wBigInt.genSquare = (q) => {
+        if (q) {
+            return (a) => (a*a) %q;
+        } else {
+            return (a) => a*a;
+        }
+    };
+
+
+    // Double
+    wBigInt.genDouble = (q) => {
+        if (q) {
+            return (a) => (a+a) %q;
+        } else {
+            return (a) => a+a;
+        }
+    };
+
+    // IsZero
+    wBigInt.genIsZero = (q) => {
+        if (q) {
+            return (a) => (a.affine(q) == wBigInt.zero);
+        } else {
+            return (a) =>  a == wBigInt.zero;
+        }
+    };
+
+
+    // Other minor functions
+    wBigInt.prototype.isOdd = function() {
+        return (this & wBigInt.one) == wBigInt(1);
+    };
+
+    wBigInt.prototype.isNegative = function() {
+        return this < wBigInt.zero;
+    };
+
+    wBigInt.prototype.and = function(m) {
+        return this & m;
+    };
+
+    wBigInt.prototype.div = function(c) {
+        return this / c;
+    };
+
+    wBigInt.prototype.mod = function(c) {
+        return this % c;
+    };
+
+    wBigInt.prototype.modPow = function(e, m) {
+        let acc = wBigInt.one;
+        let exp = this;
+        let rem = e;
+        while (rem) {
+            if (rem & wBigInt.one) {
+                acc = (acc * exp) %m;
+            }
+            exp = (exp * exp) % m;
+            rem = rem >> wBigInt.one;
+        }
+        return acc;
+    };
+
+    wBigInt.prototype.greaterOrEquals = function(b) {
+        return this >= b;
+    };
+
+    wBigInt.prototype.greater = function(b) {
+        return this > b;
+    };
+    wBigInt.prototype.gt = wBigInt.prototype.greater;
+
+    wBigInt.prototype.lesserOrEquals = function(b) {
+        return this <= b;
+    };
+
+    wBigInt.prototype.lesser = function(b) {
+        return this < b;
+    };
+    wBigInt.prototype.lt = wBigInt.prototype.lesser;
+
+    wBigInt.prototype.equals = function(b) {
+        return this == b;
+    };
+    wBigInt.prototype.eq = wBigInt.prototype.equals;
+
+    wBigInt.prototype.neq = function(b) {
+        return this != b;
+    };
+
+} else {
+
+    var oldProto = bigInt.prototype;
+    wBigInt = function(a) {
+        if ((typeof a == "string") && (a.slice(0,2) == "0x")) {
+            return bigInt(a.slice(2), 16);
+        } else {
+            return bigInt(a);
+        }
+    };
+    wBigInt.one = bigInt.one;
+    wBigInt.zero = bigInt.zero;
+    wBigInt.prototype = oldProto;
+
+    wBigInt.prototype.div = function(c) {
+        return this.divide(c);
+    };
+
+    // Affine
+    wBigInt.genAffine = (q) => {
+        const nq = wBigInt.zero.minus(q);
+        return (a) => {
+            let aux = a;
+            if (aux.isNegative()) {
+                if (aux.lesserOrEquals(nq)) {
+                    aux = aux.mod(q);
+                }
+                if (aux.isNegative()) {
+                    aux = aux.add(q);
+                }
+            } else {
+                if (aux.greaterOrEquals(q)) {
+                    aux = aux.mod(q);
+                }
+            }
+            return aux;
+        };
+    };
+
+
+    // Inverse
+    wBigInt.genInverse = (q) => {
+        return (a) => a.affine(q).modInv(q);
+    };
+
+    // Add
+    wBigInt.genAdd = (q) => {
+        if (q) {
+            return (a,b) => {
+                const r = a.add(b);
+                return r.greaterOrEquals(q) ? r.minus(q) : r;
+            };
+        } else {
+            return (a,b) => a.add(b);
+        }
+    };
+
+    // Sub
+    wBigInt.genSub = (q) => {
+        if (q) {
+            return (a,b) => a.greaterOrEquals(b) ? a.minus(b) : a.minus(b).add(q);
+        } else {
+            return (a,b) => a.minus(b);
+        }
+    };
+
+    wBigInt.genNeg = (q) => {
+        if (q) {
+            return (a) => a.isZero() ? a : q.minus(a);
+        } else {
+            return (a) => wBigInt.zero.minus(a);
+        }
+    };
+
+    // Mul
+    wBigInt.genMul = (q) => {
+        if (q) {
+            return (a,b) => a.times(b).mod(q);
+        } else {
+            return (a,b) => a.times(b);
+        }
+    };
+
+    // Shr
+    wBigInt.genShr = () => {
+        return (a,b) => a.shiftRight(wBigInt(b).value);
+    };
+
+    // Shr
+    wBigInt.genShl = (q) => {
+        if (q) {
+            return (a,b) => a.shiftLeft(wBigInt(b).value).mod(q);
+        } else {
+            return (a,b) => a.shiftLeft(wBigInt(b).value);
+        }
+    };
+
+    // Square
+    wBigInt.genSquare = (q) => {
+        if (q) {
+            return (a) => a.square().mod(q);
+        } else {
+            return (a) => a.square();
+        }
+    };
+
+    // Double
+    wBigInt.genDouble = (q) => {
+        if (q) {
+            return (a) => a.add(a).mod(q);
+        } else {
+            return (a) => a.add(a);
+        }
+    };
+
+    // Equals
+    wBigInt.genEquals = (q) => {
+        if (q) {
+            return (a,b) => a.affine(q).equals(b.affine(q));
+        } else {
+            return (a,b) => a.equals(b);
+        }
+    };
+
+    // IsZero
+    wBigInt.genIsZero = (q) => {
+        if (q) {
+            return (a) => (a.affine(q).isZero());
+        } else {
+            return (a) =>  a.isZero();
+        }
+    };
+}
+
+
+
+wBigInt.affine = function(a, q) {
+    return wBigInt.genAffine(q)(a);
+};
+
+wBigInt.prototype.affine = function (q) {
+    return wBigInt.affine(this, q);
+};
+
+wBigInt.inverse = function(a, q) {
+    return wBigInt.genInverse(q)(a);
+};
+
+wBigInt.prototype.inverse = function (q) {
+    return wBigInt.genInverse(q)(this);
+};
+
+wBigInt.add = function(a, b, q) {
+    return wBigInt.genAdd(q)(a,b);
+};
+
+wBigInt.prototype.add = function (a, q) {
+    return wBigInt.genAdd(q)(this, a);
+};
+
+wBigInt.sub = function(a, b, q) {
+    return wBigInt.genSub(q)(a,b);
+};
+
+wBigInt.prototype.sub = function (a, q) {
+    return wBigInt.genSub(q)(this, a);
+};
+
+wBigInt.neg = function(a, q) {
+    return wBigInt.genNeg(q)(a);
+};
+
+wBigInt.prototype.neg = function (q) {
+    return wBigInt.genNeg(q)(this);
+};
+
+wBigInt.mul = function(a, b, q) {
+    return wBigInt.genMul(q)(a,b);
+};
+
+wBigInt.prototype.mul = function (a, q) {
+    return wBigInt.genMul(q)(this, a);
+};
+
+wBigInt.shr = function(a, b, q) {
+    return wBigInt.genShr(q)(a,b);
+};
+
+wBigInt.prototype.shr = function (a, q) {
+    return wBigInt.genShr(q)(this, a);
+};
+
+wBigInt.shl = function(a, b, q) {
+    return wBigInt.genShl(q)(a,b);
+};
+
+wBigInt.prototype.shl = function (a, q) {
+    return wBigInt.genShl(q)(this, a);
+};
+
+wBigInt.equals = function(a, b, q) {
+    return wBigInt.genEquals(q)(a,b);
+};
+
+wBigInt.prototype.equals = function (a, q) {
+    return wBigInt.genEquals(q)(this, a);
+};
+
+wBigInt.square = function(a, q) {
+    return wBigInt.genSquare(q)(a);
+};
+
+wBigInt.prototype.square = function (q) {
+    return wBigInt.genSquare(q)(this);
+};
+
+wBigInt.double = function(a, q) {
+    return wBigInt.genDouble(q)(a);
+};
+
+wBigInt.prototype.double = function (q) {
+    return wBigInt.genDouble(q)(this);
+};
+
+wBigInt.isZero = function(a, q) {
+    return wBigInt.genIsZero(q)(a);
+};
+
+wBigInt.prototype.isZero = function (q) {
+    return wBigInt.genIsZero(q)(this);
+};
+
+wBigInt.leBuff2int = function(buff) {
+    let res = wBigInt.zero;
+    for (let i=0; i<buff.length; i++) {
+        const n = wBigInt(buff[i]);
+        res = res.add(n.shl(i*8));
+    }
+    return res;
+};
+
+wBigInt.leInt2Buff = function(n, len) {
+    let r = n;
+    let o =0;
+    const buff = Buffer.alloc(len);
+    while ((r.greater(wBigInt.zero))&&(o<buff.length)) {
+        let c = Number(r.and(wBigInt("255")));
+        buff[o] = c;
+        o++;
+        r = r.shr(8);
+    }
+    if (r.greater(wBigInt.zero)) throw new Error("Number does not feed in buffer");
+    return buff;
+};
+
+wBigInt.prototype.leInt2Buff = function (len) {
+    return wBigInt.leInt2Buff(this,len);
+};
+
+
+module.exports = wBigInt;
+
+
+}).call(this,require("buffer").Buffer)
+},{"big-integer":8,"buffer":9}],14:[function(require,module,exports){
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("./bigint");
+
+module.exports = calculateWitness;
+
+function calculateWitness(circuit, inputSignals, log) {
+    log = log || (() => {});
+    const ctx = new RTCtx(circuit, log);
+
+    function iterateSelector(values, sels, cb) {
+        if (!Array.isArray(values)) {
+            return cb(sels, values);
+        }
+        for (let i=0; i<values.length; i++) {
+            sels.push(i);
+            iterateSelector(values[i], sels, cb);
+            sels.pop(i);
+        }
+    }
+
+    ctx.setSignal("one", [], bigInt(1));
+
+    for (let c in ctx.notInitSignals) {
+        if (ctx.notInitSignals[c] == 0) ctx.triggerComponent(c);
+    }
+
+    for (let s in inputSignals) {
+        ctx.currentComponent = "main";
+        iterateSelector(inputSignals[s], [], function(selector, value) {
+            if (typeof(value) == "undefined") throw new Error("Signal not defined:" + s);
+            ctx.setSignal(s, selector, bigInt(value));
+        });
+    }
+
+    for (let i=0; i<circuit.nInputs; i++) {
+        const idx = circuit.inputIdx(i);
+        if (typeof(ctx.witness[idx]) == "undefined") {
+            throw new Error("Input Signal not assigned: " + circuit.signalNames(idx));
+        }
+    }
+
+
+    for (let i=0; i<ctx.witness.length; i++) {
+        if (typeof(ctx.witness[i]) == "undefined") {
+            throw new Error("Signal not assigned: " + circuit.signalNames(i));
+        }
+        log(circuit.signalNames(i) + " --> " + ctx.witness[i].toString());
+    }
+    return ctx.witness.slice(0, circuit.nVars);
+//    return ctx.witness;
+}
+
+class RTCtx {
+    constructor(circuit, log) {
+        this.log = log || function() {};
+        this.scopes = [];
+        this.circuit = circuit;
+        this.witness = new Array(circuit.nSignals);
+        this.notInitSignals = {};
+        for (let c in this.circuit.components) {
+            this.notInitSignals[c] = this.circuit.components[c].inputSignals;
+        }
+    }
+
+    _sels2str(sels) {
+        let res = "";
+        for (let i=0; i<sels.length; i++) {
+            res += `[${sels[i]}]`;
+        }
+        return res;
+    }
+
+    setPin(componentName, componentSels, signalName, signalSels, value) {
+        let fullName = componentName=="one" ? "one" : this.currentComponent + "." + componentName;
+        fullName += this._sels2str(componentSels) +
+                    "."+
+                    signalName+
+                    this._sels2str(signalSels);
+        this.setSignalFullName(fullName, value);
+    }
+
+    setSignal(name, sels, value) {
+        let fullName = this.currentComponent ? this.currentComponent + "." + name : name;
+        fullName += this._sels2str(sels);
+        this.setSignalFullName(fullName, value);
+    }
+
+    triggerComponent(c) {
+        this.log("Component Treiggered: " + this.circuit.components[c].name);
+//        console.log("Start Component Treiggered: " + this.circuit.components[c].name);
+
+        // Set notInitSignals to -1 to not initialize again
+        this.notInitSignals[c] --;
+        const oldComponent = this.currentComponent;
+        this.currentComponent = this.circuit.components[c].name;
+        const template = this.circuit.components[c].template;
+
+        const newScope = {};
+        for (let p in this.circuit.components[c].params) {
+            newScope[p] = this.circuit.components[c].params[p];
+        }
+
+        const oldScope = this.scopes;
+        this.scopes = [ this.scopes[0], newScope ];
+
+        // TODO set params.
+
+        this.circuit.templates[template](this);
+        this.scopes = oldScope;
+        this.currentComponent = oldComponent;
+//        console.log("End Component Treiggered: " + this.circuit.components[c].name);
+    }
+
+    callFunction(functionName, params) {
+
+        const newScope = {};
+        for (let p=0; p<this.circuit.functions[functionName].params.length; p++) {
+            const paramName = this.circuit.functions[functionName].params[p];
+            newScope[paramName] = params[p];
+        }
+
+        const oldScope = this.scopes;
+        this.scopes = [ this.scopes[0], newScope ];
+
+        // TODO set params.
+
+        const res = this.circuit.functions[functionName].func(this);
+        this.scopes = oldScope;
+
+        return res;
+    }
+
+    setSignalFullName(fullName, value) {
+        this.log("set " + fullName + " <-- " + value.toString());
+        const sId = this.circuit.getSignalIdx(fullName);
+        let firstInit =false;
+        if (typeof(this.witness[sId]) == "undefined") {
+            firstInit = true;
+        }
+        this.witness[sId] = bigInt(value);
+        const callComponents = [];
+        for (let i=0; i<this.circuit.signals[sId].triggerComponents.length; i++) {
+            var idCmp = this.circuit.signals[sId].triggerComponents[i];
+            if (firstInit) this.notInitSignals[idCmp] --;
+            callComponents.push(idCmp);
+        }
+        callComponents.map( (c) => {
+            if (this.notInitSignals[c] == 0) this.triggerComponent(c);
+        });
+        return this.witness[sId];
+    }
+
+    setVar(name, sels, value) {
+        function setVarArray(a, sels2, value) {
+            if (sels2.length == 1) {
+                a[sels2[0]] = value;
+            } else {
+                if (typeof(a[sels2[0]]) == "undefined") a[sels2[0]] = [];
+                setVarArray(a[sels2[0]], sels2.slice(1), value);
+            }
+        }
+        const scope = this.scopes[this.scopes.length-1];
+        if (sels.length == 0) {
+            scope[name] = value;
+        } else {
+            if (typeof(scope[name]) == "undefined") scope[name] = [];
+            setVarArray(scope[name], sels, value);
+        }
+        return value;
+    }
+
+    getVar(name, sels) {
+        function select(a, sels2) {
+            return  (sels2.length == 0) ? a : select(a[sels2[0]], sels2.slice(1));
+        }
+        for (let i=this.scopes.length-1; i>=0; i--) {
+            if (typeof(this.scopes[i][name]) != "undefined") return select(this.scopes[i][name], sels);
+        }
+        throw new Error("Variable not defined: " + name);
+    }
+
+    getSignal(name, sels) {
+        let fullName = name=="one" ? "one" : this.currentComponent + "." + name;
+        fullName += this._sels2str(sels);
+        return this.getSignalFullName(fullName);
+    }
+
+
+    getPin(componentName, componentSels, signalName, signalSels) {
+        let fullName = componentName=="one" ? "one" : this.currentComponent + "." + componentName;
+        fullName += this._sels2str(componentSels) +
+                    "."+
+                    signalName+
+                    this._sels2str(signalSels);
+        return this.getSignalFullName(fullName);
+    }
+
+    getSignalFullName(fullName) {
+        const sId = this.circuit.getSignalIdx(fullName);
+        if (typeof(this.witness[sId]) == "undefined") {
+            throw new Error("Signal not initialized: "+fullName);
+        }
+        this.log("get --->" + fullName + " = " + this.witness[sId].toString() );
+        return this.witness[sId];
+    }
+
+    assert(a,b) {
+        const ba = bigInt(a);
+        const bb = bigInt(b);
+        if (!ba.equals(bb)) {
+            throw new Error("Constraint doesn't match: " + ba.toString() + " != " + bb.toString());
+        }
+    }
+}
+
+},{"./bigint":13}],15:[function(require,module,exports){
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("./bigint.js");
+
+const __P__ = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+const __MASK__ = bigInt("28948022309329048855892746252171976963317496166410141009864396001978282409983"); // 0x3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+const calculateWitness = require("./calculateWitness.js");
+
+module.exports = class Circuit {
+    constructor(circuitDef) {
+        this.nPubInputs = circuitDef.nPubInputs;
+        this.nPrvInputs = circuitDef.nPrvInputs;
+        this.nInputs = circuitDef.nInputs;
+        this.nOutputs = circuitDef.nOutputs;
+        this.nVars = circuitDef.nVars;
+        this.nSignals = circuitDef.nSignals;
+        this.nConstants = circuitDef.nConstants;
+
+        this.nConstraints = circuitDef.constraints.length;
+
+        this.signalName2Idx = circuitDef.signalName2Idx;
+        this.components = circuitDef.components;
+        this.componentName2Idx = circuitDef.componentName2Idx;
+        this.signals = circuitDef.signals;
+        this.constraints = circuitDef.constraints;
+
+        this.templates = {};
+        for (let t in circuitDef.templates) {
+            this.templates[t] = eval(" const __f= " +circuitDef.templates[t] + "\n__f");
+        }
+
+        this.functions = {};
+        for (let f in circuitDef.functions) {
+            this.functions[f] = {
+                params: circuitDef.functions[f].params,
+                func: eval(" const __f= " +circuitDef.functions[f].func + "\n__f;")
+            };
+        }
+    }
+
+    calculateWitness(input, log) {
+        return calculateWitness(this, input, log);
+    }
+
+    checkWitness(w) {
+        const evalLC = (lc, w) => {
+            let acc = bigInt(0);
+            for (let k in lc) {
+                acc=  acc.add(bigInt(w[k]).mul(bigInt(lc[k]))).mod(__P__);
+            }
+            return acc;
+        }
+
+        const checkConstraint = (ct, w) => {
+            const a=evalLC(ct[0],w);
+            const b=evalLC(ct[1],w);
+            const c=evalLC(ct[2],w);
+            const res = (a.mul(b).sub(c)).affine(__P__);
+            if (!res.isZero()) return false;
+            return true;
+        }
+
+
+        for (let i=0; i<this.constraints.length; i++) {
+            if (!checkConstraint(this.constraints[i], w)) {
+                this.printCostraint(this.constraints[i]);
+                return false;
+            }
+        }
+
+        return true;
+
+    }
+
+    printCostraint(c) {
+        const lc2str = (lc) => {
+            let S = "";
+            for (let k in lc) {
+                let name = this.signals[k].names[0];
+                if (name == "one") name = "";
+                let v = bigInt(lc[k]);
+                let vs;
+                if (!v.lesserOrEquals(__P__.shr(bigInt(1)))) {
+                    v = __P__.sub(v);
+                    vs = "-"+v.toString();
+                } else {
+                    if (S!="") {
+                        vs = "+"+v.toString();
+                    } else {
+                        vs = "";
+                    }
+                    if (vs!="1") {
+                        vs = vs + v.toString();;
+                    }
+                }
+
+                S= S + " " + vs + name;
+            }
+            return S;
+        };
+        const S = `[ ${lc2str(c[0])} ] * [ ${lc2str(c[1])} ] - [ ${lc2str(c[2])} ] = 0`;
+        console.log(S);
+    }
+
+    printConstraints() {
+        for (let i=0; i<this.constraints.length; i++) {
+            this.printCostraint(this.constraints[i]);
+        }
+    }
+
+    getSignalIdx(name) {
+        if (typeof(this.signalName2Idx[name]) != "undefined") return this.signalName2Idx[name];
+        if (!isNaN(name)) return Number(name);
+        throw new Error("Invalid signal identifier: "+ name);
+    }
+
+    // returns the index of the i'th output
+    outputIdx(i) {
+        if (i>=this.nOutputs) throw new Error("Accessing an invalid output: "+i);
+        return i+1;
+    }
+
+    // returns the index of the i'th input
+    inputIdx(i) {
+        if (i>=this.nInputs) throw new Error("Accessing an invalid input: "+i);
+        return this.nOutputs + 1 + i;
+    }
+
+    // returns the index of the i'th public input
+    pubInputIdx(i) {
+        if (i>=this.nPubInputs) throw new Error("Accessing an invalid pubInput: "+i);
+        return this.inputIdx(i);
+    }
+
+    // returns the index of the i'th private input
+    prvInputIdx(i) {
+        if (i>=this.nPrvInputs) throw new Error("Accessing an invalid prvInput: "+i);
+        return this.inputIdx(this.nPubInputs + i);
+    }
+
+    // returns the index of the i'th variable
+    varIdx(i) {
+        if (i>=this.nVars) throw new Error("Accessing an invalid variable: "+i);
+        return i;
+    }
+
+    // returns the index of the i'th constant
+    constantIdx(i) {
+        if (i>=this.nConstants) throw new Error("Accessing an invalid constant: "+i);
+        return this.nVars + i;
+    }
+
+    // returns the index of the i'th signal
+    signalIdx(i) {
+        if (i>=this.nSignls) throw new Error("Accessing an invalid signal: "+i);
+        return i;
+    }
+
+    signalNames(i) {
+        return this.signals[ this.getSignalIdx(i) ].names.join(", ");
+    }
+
+    a(constraint, signalIdx) {
+        return bigInt(this.constraints[constraint][0][signalIdx] || 0 );
+    }
+
+    b(constraint, signalIdx) {
+        return bigInt(this.constraints[constraint][1][signalIdx] || 0);
+    }
+
+    c(constraint, signalIdx) {
+        return bigInt(this.constraints[constraint][2][signalIdx] || 0);
+    }
+};
+
+},{"./bigint.js":13,"./calculateWitness.js":14}],16:[function(require,module,exports){
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("./bigint.js");
+
+module.exports.stringifyBigInts = stringifyBigInts;
+module.exports.unstringifyBigInts = unstringifyBigInts;
+
+function stringifyBigInts(o) {
+    if ((typeof(o) == "bigint") || (o instanceof bigInt))  {
+        return o.toString(10);
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        for (let k in o) {
+            res[k] = stringifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function unstringifyBigInts(o) {
+    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+        return bigInt(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        for (let k in o) {
+            res[k] = unstringifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+},{"./bigint.js":13}],17:[function(require,module,exports){
 (function (process){
 /*
     Copyright 2019 0KIMS association.
@@ -5542,4 +6523,175 @@ class Groth16 {
 module.exports = build;
 
 }).call(this,require('_process'))
-},{"../build/groth16_wasm.js":1,"_process":12,"assert":3,"big-integer":8,"crypto":undefined,"worker_threads":undefined}]},{},[2]);
+},{"../build/groth16_wasm.js":1,"_process":12,"assert":3,"big-integer":8,"crypto":undefined,"worker_threads":undefined}],18:[function(require,module,exports){
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of websnark (Web Assembly zkSnark Prover).
+
+    websnark is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    websnark is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with websnark. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("big-integer");
+const Circuit = require("snarkjs/src/circuit");
+const bigInt2 = require("snarkjs/src/bigint");
+const hexifyBigInts = require("../tools/stringifybigint").hexifyBigInts;
+const unstringifyBigInts = require("../tools/stringifybigint").unstringifyBigInts;
+const stringifyBigInts2 = require("snarkjs/src/stringifybigint").stringifyBigInts;
+const unstringifyBigInts2 = require("snarkjs/src/stringifybigint").unstringifyBigInts;
+
+function bigInt2BytesLE(_a, len) {
+    const b = Array(len);
+    let v = bigInt(_a);
+    for (let i=0; i<len; i++) {
+        b[i] = v.and(0xFF).toJSNumber();
+        v = v.shiftRight(8);
+    }
+    return b;
+}
+
+function bigInt2U32LE(_a, len) {
+    const b = Array(len);
+    let v = bigInt(_a);
+    for (let i=0; i<len; i++) {
+        b[i] = v.and(0xFFFFFFFF).toJSNumber();
+        v = v.shiftRight(32);
+    }
+    return b;
+}
+
+function convertWitness(witness) {
+    const buffLen = witness.length * 32;
+    const buff = new ArrayBuffer(buffLen);
+    const h = {
+        dataView: new DataView(buff),
+        offset: 0
+    };
+    const mask = bigInt2(0xFFFFFFFF);
+    for (let i = 0; i < witness.length; i++) {
+        for (let j = 0; j < 8; j++) {
+            const v = Number(witness[i].shr(j * 32).and(mask));
+            h.dataView.setUint32(h.offset, v, true);
+            h.offset += 4;
+        }
+    }
+    return buff;
+}
+
+function toSolidityInput(proof) {
+    const result = {
+        pi_a: [proof.pi_a[0], proof.pi_a[1]],
+        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]]],
+        pi_c: [proof.pi_c[0], proof.pi_c[1]],
+    };
+    if (proof.publicSignals) {
+        result.publicSignals = proof.publicSignals;
+    }
+    return hexifyBigInts(unstringifyBigInts(result));
+}
+
+function  genWitness(input, circuitJson) {
+    const circuit = new Circuit(unstringifyBigInts2(circuitJson));
+    const witness = circuit.calculateWitness(input);
+    const publicSignals = witness.slice(1, circuit.nPubInputs + circuit.nOutputs + 1);
+    return {witness, publicSignals};
+}
+
+async function genWitnessAndProve(groth16, input, circuitJson, provingKey) {
+    const witnessData = genWitness(input, circuitJson);
+    const witnessBin = convertWitness(witnessData.witness);
+    const result = await groth16.proof(witnessBin, provingKey);
+    result.publicSignals = stringifyBigInts2(witnessData.publicSignals);
+    return result;
+}
+
+module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, genWitnessAndProve};
+},{"../tools/stringifybigint":19,"big-integer":8,"snarkjs/src/bigint":13,"snarkjs/src/circuit":15,"snarkjs/src/stringifybigint":16}],19:[function(require,module,exports){
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+const bigInt = require("big-integer");
+
+module.exports.stringifyBigInts = stringifyBigInts;
+module.exports.unstringifyBigInts = unstringifyBigInts;
+module.exports.hexifyBigInts = hexifyBigInts;
+
+function stringifyBigInts(o) {
+    if ((typeof(o) == "bigint") || (o instanceof bigInt))  {
+        return o.toString(10);
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        for (let k in o) {
+            res[k] = stringifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function unstringifyBigInts(o) {
+    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+        return bigInt(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyBigInts);
+    } else if (typeof o == "object" && !(o instanceof bigInt)) {
+        const res = {};
+        for (let k in o) {
+            res[k] = unstringifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function hexifyBigInts(o) {
+    if (typeof (o) === "bigInt" || (o instanceof bigInt)) {
+        let str = o.toString(16);
+        while (str.length < 64) str = "0" + str;
+        str = "0x" + str;
+        return str;
+    } else if (Array.isArray(o)) {
+        return o.map(hexifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        for (let k in o) {
+            res[k] = hexifyBigInts(o[k]);
+        }
+        return res;
+    } else {
+        return o;
+    }
+}
+
+},{"big-integer":8}]},{},[2]);
