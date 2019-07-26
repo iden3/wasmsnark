@@ -169,8 +169,7 @@ function thread(self) {
     };
 }
 
-async function build() {
-
+async function build({wasmInitialMemory = 5000}) {
     const groth16 = new Groth16();
 
     groth16.q = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
@@ -179,7 +178,7 @@ async function build() {
     groth16.n32 = groth16.n64*2;
     groth16.n8 = groth16.n64*8;
 
-    groth16.memory = new WebAssembly.Memory({initial:5000});
+    groth16.memory = new WebAssembly.Memory({initial:wasmInitialMemory});
     groth16.i32 = new Uint32Array(groth16.memory.buffer);
 
     const wasmModule = await WebAssembly.compile(groth16_wasm.code);
@@ -247,7 +246,7 @@ async function build() {
         const copyCode = groth16_wasm.code.buffer.slice(0);
         initPromises.push(groth16.postAction(i, {
             command: "INIT",
-            init: 5000,
+            init: wasmInitialMemory,
             code: copyCode
 
         }, [copyCode]));
