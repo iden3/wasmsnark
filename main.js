@@ -19,16 +19,30 @@
 
 /* globals window */
 
-const buildGroth16 = require("./src/groth16.js");
+const buildGroth16 = require("./src/groth16");
+const utils = require("./src/utils");
 
-buildGroth16().then( (groth16) => {
+buildGroth16().then((groth16) => {
     window.groth16 = groth16;
-    window.genZKSnarkProof = function(witness, provingKey, cb) {
+    window.zkSnarkProofToSolidityInput = utils.toSolidityInput;
 
-        const p = groth16.proof(witness, provingKey);
-
+    window.genZKSnarkProofAndWitness = function (input, circuitJson, provingKey, cb) {
+        const p = utils.genWitnessAndProve(groth16, input, circuitJson, provingKey);
         if (cb) {
-            p.then( (proof) => {
+            p.then((proof) => {
+                cb(null, proof);
+            }, (err) => {
+                cb(err);
+            });
+        } else {
+            return p;
+        }
+    };
+
+    window.genZKSnarkProof = function (witness, provingKey, cb) {
+        const p = groth16.proof(witness, provingKey);
+        if (cb) {
+            p.then((proof) => {
                 cb(null, proof);
             }, (err) => {
                 cb(err);
@@ -38,5 +52,3 @@ buildGroth16().then( (groth16) => {
         }
     };
 });
-
-
