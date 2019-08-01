@@ -169,7 +169,7 @@ function thread(self) {
     };
 }
 
-async function build({wasmInitialMemory = 5000}) {
+async function build(wasmInitialMemory = 5000) {
     const groth16 = new Groth16();
 
     groth16.q = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
