@@ -18,8 +18,16 @@
 */
 
 const bigInt = require("big-integer");
+const Circuit = require("snarkjs/src/circuit");
+const bigInt2 = require("snarkjs/src/bigint");
+const hexifyBigInts = require("../tools/stringifybigint").hexifyBigInts;
+const unhexifyBigInts = require("../tools/stringifybigint").unhexifyBigInts;
+const stringifyBigInts = require("../tools/stringifybigint").stringifyBigInts;
+const unstringifyBigInts = require("../tools/stringifybigint").unstringifyBigInts;
+const stringifyBigInts2 = require("snarkjs/src/stringifybigint").stringifyBigInts;
+const unstringifyBigInts2 = require("snarkjs/src/stringifybigint").unstringifyBigInts;
 
-exports.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
+function bigInt2BytesLE(_a, len) {
     const b = Array(len);
     let v = bigInt(_a);
     for (let i=0; i<len; i++) {
@@ -27,9 +35,9 @@ exports.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
         v = v.shiftRight(8);
     }
     return b;
-};
+}
 
-exports.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
+function bigInt2U32LE(_a, len) {
     const b = Array(len);
     let v = bigInt(_a);
     for (let i=0; i<len; i++) {
@@ -37,4 +45,64 @@ exports.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
         v = v.shiftRight(32);
     }
     return b;
-};
+}
+
+function convertWitness(witness) {
+    const buffLen = witness.length * 32;
+    const buff = new ArrayBuffer(buffLen);
+    const h = {
+        dataView: new DataView(buff),
+        offset: 0
+    };
+    const mask = bigInt2(0xFFFFFFFF);
+    for (let i = 0; i < witness.length; i++) {
+        for (let j = 0; j < 8; j++) {
+            const v = Number(witness[i].shr(j * 32).and(mask));
+            h.dataView.setUint32(h.offset, v, true);
+            h.offset += 4;
+        }
+    }
+    return buff;
+}
+
+function toSolidityInput(proof) {
+    const result = {
+        pi_a: [proof.pi_a[0], proof.pi_a[1]],
+        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]]],
+        pi_c: [proof.pi_c[0], proof.pi_c[1]],
+    };
+    if (proof.publicSignals) {
+        result.publicSignals = proof.publicSignals;
+    }
+    return hexifyBigInts(unstringifyBigInts(result));
+}
+
+function fromSolidityInput(proof) {
+    proof = unhexifyBigInts(proof);
+    const result = {
+        pi_a: [proof.pi_a[0], proof.pi_a[1], bigInt(1)],
+        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]], [bigInt(1), bigInt(0)]],
+        pi_c: [proof.pi_c[0], proof.pi_c[1], bigInt(1)]
+    };
+    if (proof.publicSignals) {
+        result.publicSignals = proof.publicSignals;
+    }
+    return stringifyBigInts(proof);
+}
+
+function  genWitness(input, circuitJson) {
+    const circuit = new Circuit(unstringifyBigInts2(circuitJson));
+    const witness = circuit.calculateWitness(unstringifyBigInts2(input));
+    const publicSignals = witness.slice(1, circuit.nPubInputs + circuit.nOutputs + 1);
+    return {witness, publicSignals};
+}
+
+async function genWitnessAndProve(groth16, input, circuitJson, provingKey) {
+    const witnessData = genWitness(input, circuitJson);
+    const witnessBin = convertWitness(witnessData.witness);
+    const result = await groth16.proof(witnessBin, provingKey);
+    result.publicSignals = stringifyBigInts2(witnessData.publicSignals);
+    return result;
+}
+
+module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, fromSolidityInput, genWitnessAndProve};
