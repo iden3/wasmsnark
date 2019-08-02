@@ -1,6 +1,6 @@
 # websnark
 
-A fast zkSnark proof and verifier generator written in native Web Assembly.
+A fast zkSnark proof and verifier and proof generator written in native Web Assembly.
 
 websnark is used to generate zkSnark Proofs and verify the from the browser.
 
