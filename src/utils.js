@@ -67,9 +67,12 @@ function convertWitness(witness) {
 
 function toSolidityInput(proof) {
     const result = {
-        pi_a: [proof.pi_a[0], proof.pi_a[1]],
-        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]]],
-        pi_c: [proof.pi_c[0], proof.pi_c[1]],
+        proof: [
+            proof.pi_a[0], proof.pi_a[1], 
+            proof.pi_b[0][1], proof.pi_b[0][0], 
+            proof.pi_b[1][1], proof.pi_b[1][0],
+            proof.pi_c[0], proof.pi_c[1],
+        ]
     };
     if (proof.publicSignals) {
         result.publicSignals = proof.publicSignals;
@@ -80,9 +83,9 @@ function toSolidityInput(proof) {
 function fromSolidityInput(proof) {
     proof = unhexifyBigInts(proof);
     const result = {
-        pi_a: [proof.pi_a[0], proof.pi_a[1], bigInt(1)],
-        pi_b: [[proof.pi_b[0][1], proof.pi_b[0][0]], [proof.pi_b[1][1], proof.pi_b[1][0]], [bigInt(1), bigInt(0)]],
-        pi_c: [proof.pi_c[0], proof.pi_c[1], bigInt(1)]
+        pi_a: [proof.proof[0], proof.proof[1], bigInt(1)],
+        pi_b: [[proof.proof[3], proof.proof[2]], [proof.proof[5], proof.proof[4]], [bigInt(1), bigInt(0)]],
+        pi_c: [proof.proof[6], proof.proof[7], bigInt(1)]
     };
     if (proof.publicSignals) {
         result.publicSignals = proof.publicSignals;
