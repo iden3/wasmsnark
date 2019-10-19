@@ -578,7 +578,7 @@ class Bn128 {
         }, [signals, polsA, polsB]);
     }
 
-    async groth16GenProof(signals, pkey) {
+    async groth16GenProof(signals, pkey, allowDeltaZero) {
         const pkey32 = new Uint32Array(pkey);
         const nSignals = pkey32[0];
         const nPublic = pkey32[1];
@@ -604,6 +604,9 @@ class Bn128 {
         const beta2 = pkey.slice(10*4 + 192, 10*4 + 320);
         const delta2 = pkey.slice(10*4 + 320, 10*4 + 448);
 
+        if (!allowDeltaZero && ((this.instance.exports.g1m_isZero(delta1) == 1) || (this.instance.exports.g1m_isZero(delta2) == 1))) {
+          throw new Error('delta1 or delta2 are zero, subverted CRS');
+        }
 
         const pH = this.calcH(signals.slice(0), polsA, polsB, nSignals, domainSize).then( (h) => {
 /* Debug code to print the result of h
