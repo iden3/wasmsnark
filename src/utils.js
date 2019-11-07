@@ -65,32 +65,26 @@ function convertWitness(witness) {
     return buff;
 }
 
-function toSolidityInput(proof) {
-    const result = {
-        proof: [
-            proof.pi_a[0], proof.pi_a[1], 
-            proof.pi_b[0][1], proof.pi_b[0][0], 
-            proof.pi_b[1][1], proof.pi_b[1][0],
-            proof.pi_c[0], proof.pi_c[1],
-        ]
-    };
-    if (proof.publicSignals) {
-        result.publicSignals = proof.publicSignals;
-    }
-    return hexifyBigInts(unstringifyBigInts(result));
+function toHex32(number) {
+    let str = number.toString(16);
+    while (str.length < 64) str = "0" + str;
+    return str;
 }
 
-function fromSolidityInput(proof) {
-    proof = unhexifyBigInts(proof);
+function toSolidityInput(proof) {
+    const flatProof = unstringifyBigInts([
+        proof.pi_a[0], proof.pi_a[1],
+        proof.pi_b[0][1], proof.pi_b[0][0],
+        proof.pi_b[1][1], proof.pi_b[1][0],
+        proof.pi_c[0], proof.pi_c[1],
+    ]);
     const result = {
-        pi_a: [proof.proof[0], proof.proof[1], bigInt(1)],
-        pi_b: [[proof.proof[3], proof.proof[2]], [proof.proof[5], proof.proof[4]], [bigInt(1), bigInt(0)]],
-        pi_c: [proof.proof[6], proof.proof[7], bigInt(1)]
+        proof: "0x" + flatProof.map(x => toHex32(x)).join("")
     };
     if (proof.publicSignals) {
-        result.publicSignals = proof.publicSignals;
+        result.publicSignals = hexifyBigInts(unstringifyBigInts(proof.publicSignals));
     }
-    return stringifyBigInts(proof);
+    return result;
 }
 
 function  genWitness(input, circuitJson) {
@@ -108,4 +102,4 @@ async function genWitnessAndProve(groth16, input, circuitJson, provingKey) {
     return result;
 }
 
-module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, fromSolidityInput, genWitnessAndProve};
+module.exports = {bigInt2BytesLE, bigInt2U32LE, toSolidityInput, genWitnessAndProve};
