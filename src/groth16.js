@@ -250,7 +250,7 @@ async function build(params) {
         const copyCode = groth16_wasm.code.buffer.slice(0);
         initPromises.push(groth16.postAction(i, {
             command: "INIT",
-            init: wasmInitialMemory,
+            init: defaultParams.wasmInitialMemory,
             code: copyCode
 
         }, [copyCode]));
