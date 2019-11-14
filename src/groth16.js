@@ -69,7 +69,7 @@ function thread(self) {
         const res = i32[0];
         i32[0] += length;
         while (i32[0] > memory.buffer.byteLength) {
-          memory.grow(100);
+            memory.grow(100);
         }
         i32 = new Uint32Array(memory.buffer);
         return res;
@@ -169,7 +169,11 @@ function thread(self) {
     };
 }
 
-async function build(wasmInitialMemory = 5000) {
+// We use the Object.assign approach for the backwards compatibility
+// @params Number wasmInitialMemory 
+async function build(params) {
+    const defaultParams = { wasmInitialMemory: 5000 };
+    Object.assign(defaultParams, params);
     const groth16 = new Groth16();
 
     groth16.q = bigInt("21888242871839275222246405745257275088696311157297823662689037894645226208583");
@@ -178,7 +182,7 @@ async function build(wasmInitialMemory = 5000) {
     groth16.n32 = groth16.n64*2;
     groth16.n8 = groth16.n64*8;
 
-    groth16.memory = new WebAssembly.Memory({initial:wasmInitialMemory});
+    groth16.memory = new WebAssembly.Memory({initial:defaultParams.wasmInitialMemory});
     groth16.i32 = new Uint32Array(groth16.memory.buffer);
 
     const wasmModule = await WebAssembly.compile(groth16_wasm.code);
@@ -491,7 +495,7 @@ class Groth16 {
 
 
         const pH = this.calcH(signals.slice(0), polsA, polsB, nSignals, domainSize).then( (h) => {
-/* Debug code to print the result of h
+            /* Debug code to print the result of h
             for (let i=0; i<domainSize; i++) {
                 const a = this.bin2int(h.slice(i*32, i*32+32));
                 console.log(i + " -> " + a.toString());
@@ -546,9 +550,9 @@ class Groth16 {
             this.putBin(ps, bs);
         }
 
-/// Uncoment it to debug and check it works
-//        this.instance.exports.f1m_zero(pr);
-//        this.instance.exports.f1m_zero(ps);
+        /// Uncoment it to debug and check it works
+        //        this.instance.exports.f1m_zero(pr);
+        //        this.instance.exports.f1m_zero(ps);
 
         // pi_a = pi_a + Alfa1 + r*Delta1
         this.instance.exports.g1_add(pAlfa1, pi_a, pi_a);
