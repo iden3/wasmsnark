@@ -50,11 +50,19 @@ describe("Basic tests for bn128 proof generator", () => {
     });
 
     it("It should do a zkSnark test", async () => {
+
+        function copyBuff(src) {
+            var dst = new ArrayBuffer(src.byteLength);
+            new Uint8Array(dst).set(new Uint8Array(src));
+            return dst;
+        }
+
+
         const bn128 = await buildBn128();
 
         const signals = fs.readFileSync(path.join(__dirname, "data", "witness.bin"));
         const provingKey = fs.readFileSync(path.join(__dirname, "data", "proving_key.bin"));
-        const proofS = await bn128.proof(signals.buffer, provingKey.buffer);
+        const proofS = await bn128.groth16GenProof(copyBuff(signals), copyBuff(provingKey));
 
         const proof = snarkjs.unstringifyBigInts(proofS);
         const verifierKey = snarkjs.unstringifyBigInts(JSON.parse(fs.readFileSync(path.join(__dirname, "data", "verification_key.json"), "utf8")));
