@@ -1,13 +1,12 @@
 {
-  "name": "websnark",
-  "version": "0.0.5",
-  "description": "big integer library to work in Zq",
+  "name": "wasmsnark",
+  "version": "0.0.7",
+  "description": "zksnark wasm library",
   "main": "index.js",
   "scripts": {
     "test": "mocha --experimental-worker",
-    "buildwasm": "node tools/buildwasm.js",
-    "build_bn128": "node tools/buildwasm_bn128.js; browserify main_bn128.js -o build/websnark_bn128.js --exclude worker_threads --exclude crypto; cp build/websnark_bn128.js example/bn128/websnark_bn128.js",
-    "build_mnt6753": "node tools/buildwasm_mnt6753.js; browserify main_mnt6753.js -o build/websnark_mnt6753.js --exclude worker_threads --exclude crypto; cp build/websnark_mnt6753.js example/mnt6753/websnark_mnt6753.js"
+    "build_bn128": "node tools/buildwasm_bn128.js; browserify main_bn128.js -o build/wasmsnark_bn128.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_bn128.js example/bn128/wasmsnark_bn128.js",
+    "build_mnt6753": "node tools/buildwasm_mnt6753.js; browserify main_mnt6753.js -o build/wasmsnark_mnt6753.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_mnt6753.js example/mnt6753/wasmsnark_mnt6753.js"
   },
   "keywords": [
     "bigint",
@@ -23,13 +22,11 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iden3/websnark.git"
+    "url": "https://github.com/iden3/wasmsnark.git"
   },
   "devDependencies": {
     "browserify": "^16.2.3",
-    "eslint": "^5.14.0",
-    "eslint-plugin-mocha": "^5.3.0",
-    "eslint-plugin-webassembly": "^1.8.4",
+    "eslint": "^6.8.0",
     "mocha": "^6.1.4",
     "package": "^1.0.1",
     "snarkjs": "^0.1.12",
