@@ -5007,7 +5007,6 @@ process.umask = function() { return 0; };
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* globals WebAssembly, Blob, Worker, navigator, Promise, window */
 const bigInt = require("big-integer");
 const bn128_wasm = require("../build/bn128_wasm.js");
 const assert = require("assert");
