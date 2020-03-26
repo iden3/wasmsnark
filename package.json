@@ -1,6 +1,6 @@
 {
   "name": "wasmsnark",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "zksnark wasm library",
   "main": "index.js",
   "scripts": {
