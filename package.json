@@ -31,7 +31,7 @@
     "eslint-plugin-webassembly": "^1.8.4",
     "mocha": "^6.1.4",
     "package": "^1.0.1",
-    "snarkjs": "^0.1.12",
+    "snarkjs": "git+https://github.com/peppersec/snarkjs.git#869181cfaf7526fe8972073d31655493a04326d5",
     "wasmbuilder": "0.0.3"
   },
   "dependencies": {
