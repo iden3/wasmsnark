@@ -17,7 +17,7 @@
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const buildTimesScalar = require("../build_timesscalar");
+const buildTimesScalar = require("./build_timesscalar");
 
 module.exports = function buildCurve(module, prefix, prefixField) {
 

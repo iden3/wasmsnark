@@ -5,8 +5,11 @@ const buildF1m =require("../build_f1m.js");
 const buildF1 =require("../build_f1.js");
 const buildF2m =require("../build_f2m.js");
 const buildF3m =require("../build_f3m.js");
-const buildCurve =require("./build_curve.js");
+const buildCurve =require("../build_curve_projective.js");
 
+//
+// Curve definition: https://coinlist.co/build/coda/pages/mnt6753
+//
 module.exports = function buildMNT6753(module, _prefix) {
 
     const prefix = _prefix || "mnt6753";
