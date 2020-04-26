@@ -3,7 +3,7 @@ const bigInt = require("big-integer");
 const buildBls12381 = require("../src/bls12381/build_bls12381.js");
 const buildProtoboard = require("wasmbuilder").buildProtoboard;
 
-describe("Basic tests for g1 in bn128", function () {
+describe("Basic tests for g1 in bls12-381", function () {
 
     this.timeout(10000000);
 
