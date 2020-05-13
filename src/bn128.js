@@ -518,6 +518,7 @@ class Bn128 {
         this.instance.exports.f1m_fromMontgomery(p, p);
         const r = this.bin2int(this.i32.slice(p>>2, (p+SIZEF1)>>2)).toString();
         this.instance.exports.f1m_toMontgomery(p, p);
+        return r;
     }
 
     getF2(p) {
