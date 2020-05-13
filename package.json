@@ -29,7 +29,6 @@
     "eslint": "^6.8.0",
     "mocha": "^6.1.4",
     "package": "^1.0.1",
-    "snarkjs": "^0.1.12",
     "wasmbuilder": "0.0.10"
   },
   "dependencies": {

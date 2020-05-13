@@ -701,12 +701,12 @@ describe("Basic tests for g1 in bls12-381", function () {
         // }
         pb.bls12381_millerLoop(pPreP, pPreQ, pRes1);
         // printF12("Miller Result: ", pRes1);
-        pb.bls12381_finalExponentiationOld(pRes1, pRes2);
+        pb.bls12381_finalExponentiation(pRes1, pRes2);
 
         pb.bls12381_prepareG1(pG1gen, pPreP);
         pb.bls12381_prepareG2(pG2s, pPreQ);
         pb.bls12381_millerLoop(pPreP, pPreQ, pRes3);
-        pb.bls12381_finalExponentiationOld(pRes3, pRes4);
+        pb.bls12381_finalExponentiation(pRes3, pRes4);
 
         const res2 = getFieldElementF12(pRes2);
         const res4 = getFieldElementF12(pRes4);
