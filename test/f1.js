@@ -560,6 +560,28 @@ describe("Basic tests for Zq", () => {
 
     });
 
+    it("It Batch inverse", async () => {
+        const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
+        const pbF1m = await buildProtoboard((module) => {
+            buildF1m(module, q);
+        }, 32);
+
+        const pA = pbF1m.alloc(32 *10);
+
+        pbF1m.f1m_one(pA);
+        for (let i=1; i<5; i++) {
+            pbF1m.f1m_add(pA, pA + 32*(i-1), pA+32*i);
+        }
+
+        pbF1m.f1m_batchInverse(pA,32, 5,pA+32*5, 32);
+
+        for (let i=1; i<5; i++) {
+            pbF1m.f1m_mul(pA+i*32, pA+(i+5)*32, pA+i*32);
+            assert(pbF1m.f1m_isOne(pA+i*32));
+        }
+    });
+
     it("It should sqrt right", async () => {
         const q = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
         const v= [
@@ -591,14 +613,10 @@ describe("Basic tests for Zq", () => {
             pbF1m.f1m_fromMontgomery(pC, pC);
 
             const c = pbF1m.get(pC);
-            let expectedC;
-            if (v[i].isOdd()) {
-                expectedC = q.minus(v[i]);
-            } else {
-                expectedC = v[i];
-            }
+            const expectedC = q.minus(v[i]);
+            const expectedCn = v[i];
 
-            assert(c.equals(expectedC));
+            assert(c.equals(expectedC) || c.equals(expectedCn) );
 
 
             pbF1m.set(pA, v[i]);

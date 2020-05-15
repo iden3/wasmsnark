@@ -21,6 +21,7 @@ const bigInt = require("big-integer");
 const buildInt = require("./build_int.js");
 const utils = require("./utils.js");
 const buildExp = require("./build_timesscalar");
+const buildBatchInverse = require("./build_batchinverse");
 
 module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
     const q = bigInt(_q);
@@ -112,7 +113,7 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
         );
     }
 
-/*
+
     function buildIsNegative() {
         const f = module.addFunction(prefix+"_isNegative");
         f.addParam("x", "i32");
@@ -127,9 +128,9 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
             c.call(intPrefix + "_gte", AUX, c.i32_const(pePlusOne) )
         );
     }
-*/
 
 
+/*
     function buildIsNegative() {
         const f = module.addFunction(prefix+"_isNegative");
         f.addParam("x", "i32");
@@ -147,7 +148,30 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
             )
         );
     }
+*/
 
+    function buildSign() {
+        const f = module.addFunction(prefix+"_sign");
+        f.addParam("x", "i32");
+        f.setReturnType("i32");
+
+        const c = f.getCodeBuilder();
+
+        const AUX = c.i32_const(module.alloc(n8));
+
+        f.addCode(
+            c.if (
+                c.call(intPrefix + "_isZero", c.getLocal("x")),
+                c.ret(c.i32_const(0))
+            ),
+            c.call(prefix + "_fromMontgomery", c.getLocal("x"), AUX),
+            c.if(
+                c.call(intPrefix + "_gte", AUX, c.i32_const(pePlusOne)),
+                c.ret(c.i32_const(-1))
+            ),
+            c.ret(c.i32_const(1))
+        );
+    }
 
 
     function buildMReduct() {
@@ -977,9 +1001,24 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
         );
     }
 
+    function buildIsOne() {
+        const f = module.addFunction(prefix+"_isOne");
+        f.addParam("x", "i32");
+        f.setReturnType("i32");
+
+        const c = f.getCodeBuilder();
+        f.addCode(
+            c.ret(c.call(intPrefix + "_eq", c.getLocal("x"), c.i32_const(pOne)))
+        );
+    }
 
 
+    module.exportFunction(intPrefix + "_copy", prefix+"_copy");
+    module.exportFunction(intPrefix + "_zero", prefix+"_zero");
+    module.exportFunction(intPrefix + "_isZero", prefix+"_isZero");
+    module.exportFunction(intPrefix + "_eq", prefix+"_eq");
 
+    buildIsOne();
     buildAdd();
     buildSub();
     buildNeg();
@@ -990,14 +1029,18 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
     buildToMontgomery();
     buildFromMontgomery();
     buildIsNegative();
+    buildSign();
     buildInverse();
     buildOne();
     buildLoad();
     buildTimesScalar();
+    buildBatchInverse(module, prefix);
     module.exportFunction(prefix + "_add");
     module.exportFunction(prefix + "_sub");
     module.exportFunction(prefix + "_neg");
     module.exportFunction(prefix + "_isNegative");
+    module.exportFunction(prefix + "_isOne");
+    module.exportFunction(prefix + "_sign");
     module.exportFunction(prefix + "_mReduct");
     module.exportFunction(prefix + "_mul");
     module.exportFunction(prefix + "_square");
@@ -1005,10 +1048,6 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
     module.exportFunction(prefix + "_fromMontgomery");
     module.exportFunction(prefix + "_toMontgomery");
     module.exportFunction(prefix + "_inverse");
-    module.exportFunction(intPrefix + "_copy", prefix+"_copy");
-    module.exportFunction(intPrefix + "_zero", prefix+"_zero");
-    module.exportFunction(intPrefix + "_isZero", prefix+"_isZero");
-    module.exportFunction(intPrefix + "_eq", prefix+"_eq");
     module.exportFunction(prefix + "_one");
     module.exportFunction(prefix + "_load");
     module.exportFunction(prefix + "_timesScalar");
@@ -1022,11 +1061,14 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
         prefix + "_one",
     );
     module.exportFunction(prefix + "_exp");
+    module.exportFunction(prefix + "_batchInverse");
     if (q.isPrime()) {
         buildSqrt();
         buildIsSquare();
         module.exportFunction(prefix + "_sqrt");
         module.exportFunction(prefix + "_isSquare");
     }
+    // console.log(module.functionIdxByName);
+
     return prefix;
 };

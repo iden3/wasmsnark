@@ -324,7 +324,7 @@ module.exports = function buildMNT6753(module, _prefix) {
             c.call(f1mPrefix + "_copy", PX, cPX),
             c.call(f1mPrefix + "_copy", PY, cPY),
             c.call(f1mPrefix + "_copy", PZ, cPZ),
-            c.call(g1mPrefix + "_affine", cPX, cPX),
+            c.call(g1mPrefix + "_normalize", cPX, cPX),
             c.call(f1mPrefix + "_zero", cPXtwist_0),
             c.call(f1mPrefix + "_copy", cPX, cPXtwist_1),
             c.call(f1mPrefix + "_zero", cPXtwist_2),
@@ -395,7 +395,7 @@ module.exports = function buildMNT6753(module, _prefix) {
             c.call(f3mPrefix + "_copy", QX, cQX),
             c.call(f3mPrefix + "_copy", QY, cQY),
             c.call(f3mPrefix + "_copy", QZ, cQZ),
-            c.call(g2mPrefix + "_affine", cQX, cQX),  // TODO Remove if already in affine
+            c.call(g2mPrefix + "_normalize", cQX, cQX),  // TODO Remove if already in affine
             c.call(f3mPrefix + "_square", cQY, cQY2),
             c.call(f3mPrefix + "_mul", cQX, c.i32_const(pTwistInv), cQX_over_twist),
             c.call(f3mPrefix + "_mul", cQY, c.i32_const(pTwistInv), cQY_over_twist),

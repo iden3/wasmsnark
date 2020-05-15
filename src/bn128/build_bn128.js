@@ -9,6 +9,7 @@ const buildCurve =require("../build_curve_jacobian_a0.js");
 const buildFFT = require("../build_fft");
 const buildMultiexp = require("../build_multiexp");
 const buildPol = require("../build_pol");
+const buildApplyKey = require("../build_applykey");
 
 module.exports = function buildBN128(module, _prefix) {
 
@@ -32,7 +33,9 @@ module.exports = function buildBN128(module, _prefix) {
 
     const f1mPrefix = buildF1m(module, q, "f1m");
     buildF1(module, r, "fr", "frm");
+
     const g1mPrefix = buildCurve(module, "g1m", "f1m");
+
     buildMultiexp(module, "g1m", "g1m", "f1m", "fr");
     buildFFT(module, "fft", "frm");
     buildPol(module, "pol", "frm");
@@ -41,6 +44,8 @@ module.exports = function buildBN128(module, _prefix) {
     const g2mPrefix = buildCurve(module, "g2m", "f2m");
     buildMultiexp(module, "g2m", "g2m", "f2m", "fr");
 
+    buildApplyKey(module, "g1m", "frm");
+    buildApplyKey(module, "g2m", "frm");
 
 
 
@@ -270,7 +275,7 @@ module.exports = function buildBN128(module, _prefix) {
         const c = f.getCodeBuilder();
 
         f.addCode(
-            c.call(g1mPrefix + "_affine", c.getLocal("pP"), c.getLocal("ppreP")),  // TODO Remove if already in affine
+            c.call(g1mPrefix + "_normalize", c.getLocal("pP"), c.getLocal("ppreP")),  // TODO Remove if already in affine
         );
     }
 
@@ -525,7 +530,7 @@ module.exports = function buildBN128(module, _prefix) {
         const Q2Z = c.i32_const(pQ2 + f2size*2);
 
         f.addCode(
-            c.call(g2mPrefix + "_affine", QX, cQX),  // TODO Remove if already in affine
+            c.call(g2mPrefix + "_normalize", QX, cQX),  // TODO Remove if already in affine
             c.call(f2mPrefix + "_copy", cQX, RX),
             c.call(f2mPrefix + "_copy", cQY, RY),
             c.call(f2mPrefix + "_one", RZ),
@@ -1373,6 +1378,10 @@ module.exports = function buildBN128(module, _prefix) {
     module.exportFunction(prefix + "__cyclotomicSquare");
     module.exportFunction(prefix + "__cyclotomicExp_w0");
 
+    module.exportFunction("g1m_batchApplyKey");
+    module.exportFunction("g2m_batchApplyKey");
+
+    console.log(module.functionIdxByName);
 
 };
 

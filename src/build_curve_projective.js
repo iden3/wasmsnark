@@ -621,8 +621,8 @@ module.exports = function buildCurve(module, prefix, prefixField, fnMulByA) {
     }
 
 
-    function buildAffine() {
-        const f = module.addFunction(prefix + "_affine");
+    function buildNormalize() {
+        const f = module.addFunction(prefix + "_normalize");
         f.addParam("p1", "i32");
         f.addParam("pr", "i32");
 
@@ -666,7 +666,7 @@ module.exports = function buildCurve(module, prefix, prefixField, fnMulByA) {
     buildSubMixed();
     buildFromMontgomery();
     buildToMontgomery();
-    buildAffine();
+    buildNormalize();
 
 
     buildTimesScalar(
@@ -703,7 +703,7 @@ module.exports = function buildCurve(module, prefix, prefixField, fnMulByA) {
     module.exportFunction(prefix + "_subMixed");
     module.exportFunction(prefix + "_fromMontgomery");
     module.exportFunction(prefix + "_toMontgomery");
-    module.exportFunction(prefix + "_affine");
+    module.exportFunction(prefix + "_normalize");
     module.exportFunction(prefix + "_timesScalar");
     module.exportFunction(prefix + "_timesScalarOld");
 

@@ -6,7 +6,8 @@
   "scripts": {
     "test": "mocha --experimental-worker",
     "build_bn128": "node tools/buildwasm_bn128.js; browserify main_bn128.js -o build/wasmsnark_bn128.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_bn128.js example/bn128/wasmsnark_bn128.js",
-    "build_mnt6753": "node tools/buildwasm_mnt6753.js; browserify main_mnt6753.js -o build/wasmsnark_mnt6753.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_mnt6753.js example/mnt6753/wasmsnark_mnt6753.js"
+    "build_mnt6753": "node tools/buildwasm_mnt6753.js; browserify main_mnt6753.js -o build/wasmsnark_mnt6753.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_mnt6753.js example/mnt6753/wasmsnark_mnt6753.js",
+    "build_bls12381": "node tools/buildwasm_bls12381.js; browserify main_bls12381.js -o build/wasmsnark_bls12381.js --exclude worker_threads --exclude crypto; cp build/wasmsnark_bls12381.js example/bls12381/wasmsnark_bls12381.js"
   },
   "keywords": [
     "bigint",

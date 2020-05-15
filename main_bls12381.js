@@ -1,0 +1,57 @@
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmsnark (Web Assembly zkSnark Prover).
+
+    wasmsnark is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmsnark is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/* globals window */
+
+const buildBls12381 = require("./src/bls12381.js");
+
+buildBls12381().then( (bls12381) => {
+    window.bls12381 = bls12381;
+    window.groth16GenProof = function(witness, provingKey, cb) {
+
+        const p = bls12381.groth16GenProof(witness, provingKey);
+
+        if (cb) {
+            p.then( (proof) => {
+                cb(null, proof);
+            }, (err) => {
+                cb(err);
+            });
+        } else {
+            return p;
+        }
+    };
+
+    window.groth16Verify = function(verificationKey, input, proof, cb) {
+
+        const p = bls12381.groth16Verify(verificationKey, input, proof);
+
+        if (cb) {
+            p.then( (proof) => {
+                cb(null, proof);
+            }, (err) => {
+                cb(err);
+            });
+        } else {
+            return p;
+        }
+    };
+});
+
+

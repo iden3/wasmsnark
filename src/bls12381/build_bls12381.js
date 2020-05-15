@@ -278,7 +278,7 @@ module.exports = function buildBLS12381(module, _prefix) {
         const c = f.getCodeBuilder();
 
         f.addCode(
-            c.call(g1mPrefix + "_affine", c.getLocal("pP"), c.getLocal("ppreP")),  // TODO Remove if already in affine
+            c.call(g1mPrefix + "_normalize", c.getLocal("pP"), c.getLocal("ppreP")),  // TODO Remove if already in affine
         );
     }
 
@@ -543,7 +543,7 @@ module.exports = function buildBLS12381(module, _prefix) {
         const base = c.getLocal("ppreQ");
 
         f.addCode(
-            c.call(g2mPrefix + "_affine", Q, base),
+            c.call(g2mPrefix + "_normalize", Q, base),
             c.if(
                 c.call(g2mPrefix + "_isZero", base),
                 c.ret([])
@@ -1356,6 +1356,6 @@ module.exports = function buildBLS12381(module, _prefix) {
     module.exportFunction(f6mPrefix + "_mul01");
     module.exportFunction(ftmPrefix + "_mul014");
 
-    // console.log(module.functionIdxByName);
+    console.log(module.functionIdxByName);
 };
 

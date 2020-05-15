@@ -153,7 +153,7 @@ module.exports = function buildPedersenHash(module, prefix, curvePrefix, pointFi
 
             c.call(prefix + "__addAccumulators", accumulators, c.i32_const(chunkSize), aux),
 
-            c.call(curvePrefix + "_affine", aux, aux),
+            c.call(curvePrefix + "_normalize", aux, aux),
             c.call(curvePrefix + "_fromMontgomery", aux, aux),
 
             c.call(pointFieldPrefix + "_copy", aux, c.getLocal("pr"))

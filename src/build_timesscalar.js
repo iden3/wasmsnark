@@ -69,7 +69,7 @@ module.exports = function buildTimesScalar(module, fnName, elementLen, opAB, opA
                                 c.i32_const(0x80 >> i)
                             )
                         ),
-                        ...c.call(opAB, aux, c.getLocal("r"), c.getLocal("r"))
+                        ...c.call(opAB, c.getLocal("r"),aux, c.getLocal("r"))
                     ]
                 )
             );

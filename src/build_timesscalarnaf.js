@@ -208,7 +208,7 @@ module.exports = function buildTimesScalarNAF(module, fnName, elementLen, opAB, 
                 c.getLocal("cur"),
                 c.if(
                     c.i32_eq(c.getLocal("cur"), c.i32_const(1)),
-                    c.call(opAB, aux, c.getLocal("r"), c.getLocal("r")),
+                    c.call(opAB,  c.getLocal("r"), aux, c.getLocal("r")),
                     c.call(opAmB, c.getLocal("r"), aux, c.getLocal("r")),
                 )
             ),

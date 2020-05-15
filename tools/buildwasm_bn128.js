@@ -1,4 +1,3 @@
-const bigInt = require("big-integer");
 const ModuleBuilder = require("wasmbuilder").ModuleBuilder;
 const buildBn128 = require("../src/bn128/build_bn128.js");
 const fs = require("fs");
@@ -25,6 +24,11 @@ function buildWasm() {
             exports.prePSize = ${moduleBuilder.modules.bn128.prePSize};
             exports.preQSize = ${moduleBuilder.modules.bn128.preQSize};
         `
+    );
+
+    fs.writeFileSync(
+        path.join( __dirname, "..", "build", "bn128.wasm"),
+        Buffer.from(code)
     );
 }
 

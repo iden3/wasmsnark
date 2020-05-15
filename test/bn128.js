@@ -73,6 +73,18 @@ describe("Basic tests for g1 in bn128", () => {
         console.log("Fq2(\n" + ns(p+32*10) + " +\n " + ns(p+32*11) +"*u]]" );
     }
 
+    function printG1(s, p) {
+        console.log(s + " G1(" + ns(p) + " , " + ns(p+n8) + " , " + ns(p+n8*2) + ")"   );
+    }
+
+    function printG2(s, p) {
+        console.log(s + " (G2):");
+        for (let i=0; i<6; i++) {
+            console.log(ns(p+n8*i));
+        }
+        console.log("");
+    }
+
 
     let pb;
     const n8=32;
@@ -81,7 +93,37 @@ describe("Basic tests for g1 in bn128", () => {
             buildBn128(module);
         }, n8);
     });
+
+    it("Should do batch inverse", async () => {
+
+    });
+/*
     it("It should do a basic point doubling adding G1", async () => {
+        const pG1 = pb.bn128.pG1gen;
+
+        const p1 = pb.alloc(n8*3);
+        const p2 = pb.alloc(n8*3);
+
+        pb.g1m_add(pG1, pG1, p1); // 2*G1
+        // pb.g1m_normalize(p1, p1);
+        printG1("2*G1=",p1);
+        pb.g1m_add(p1, pG1, p1);  // 3*G1
+        // pb.g1m_normalize(p1, p1);
+        printG1("3*G1=",p1);
+        pb.g1m_add(p1, pG1, p1);  // 4*G1
+
+        pb.g1m_double(pG1, p2); // 2*G1
+        pb.g1m_double(p2, p2); // 4*G1
+
+        assert.equal(pb.g1m_isZero(pG1), 0);
+        assert.equal(pb.g1m_eq(p1, p2), 1);
+
+        pb.g1m_sub(p1, p2, p1);  // 0
+        assert.equal(pb.g1m_isZero(p1), 1);
+
+    });
+
+    it("It should do a basic doubling adding G1", async () => {
         const pG1 = pb.bn128.pG1gen;
 
         const p1 = pb.alloc(n8*3);
@@ -129,6 +171,26 @@ describe("Basic tests for g1 in bn128", () => {
         const p1 = pb.alloc(n8*3);
 
         pb.g1m_timesScalar(pG1, pr, n8, p1);
+
+        assert.equal(pb.g1m_isZero(p1), 1);
+    });
+    it("G1n == 0 timesScalarAffine", async () => {
+        const pG1 = pb.bn128.pG1gen;
+        const pr = pb.bn128.pr;
+
+        const p1 = pb.alloc(n8*3);
+
+        pb.g1m_timesScalarAffine(pG1, pr, n8, p1);
+
+        assert.equal(pb.g1m_isZero(p1), 1);
+    });
+    it("G2n == 0 timesScalarAffine", async () => {
+        const pG2 = pb.bn128.pG2gen;
+        const pr = pb.bn128.pr;
+
+        const p1 = pb.alloc(n8*3*2);
+
+        pb.g1m_timesScalarAffine(pG2, pr, n8, p1);
 
         assert.equal(pb.g1m_isZero(p1), 1);
     });
@@ -256,16 +318,15 @@ describe("Basic tests for g1 in bn128", () => {
 
     it("Should test Inverse", async () => {
 
-        /*
-        template<typename FieldT>
-        void test_unitary_inverse()
-        {
-            assert(FieldT::extension_degree() % 2 == 0);
-            FieldT a = FieldT::random_element();
-            FieldT aqcubed_minus1 = a.Frobenius_map(FieldT::extension_degree()/2) * a.inverse();
-            assert(aqcubed_minus1.inverse() == aqcubed_minus1.unitary_inverse());
-        }
-        */
+
+        // template<typename FieldT>
+        // void test_unitary_inverse()
+        // {
+        //     assert(FieldT::extension_degree() % 2 == 0);
+        //     FieldT a = FieldT::random_element();
+        //     FieldT aqcubed_minus1 = a.Frobenius_map(FieldT::extension_degree()/2) * a.inverse();
+        //     assert(aqcubed_minus1.inverse() == aqcubed_minus1.unitary_inverse());
+        // }
 
         const pA = pb.alloc(32*12);
         const pAf = pb.alloc(32*12);
@@ -293,15 +354,15 @@ describe("Basic tests for g1 in bn128", () => {
     });
 
     it("Should test Cyclotomic Square", async () => {
-        /*
-        typedef Fqk<edwards_pp> FieldT;
-        assert(FieldT::extension_degree() % 2 == 0);
-        FieldT a = FieldT::random_element();
-        FieldT a_unitary = a.Frobenius_map(FieldT::extension_degree()/2) * a.inverse();
-        // beta = a^((q^(k/2)-1)*(q+1))
-        FieldT beta = a_unitary.Frobenius_map(1) * a_unitary;
-        assert(beta.cyclotomic_squared() == beta.squared());
-        */
+
+        // typedef Fqk<edwards_pp> FieldT;
+        // assert(FieldT::extension_degree() % 2 == 0);
+        // FieldT a = FieldT::random_element();
+        // FieldT a_unitary = a.Frobenius_map(FieldT::extension_degree()/2) * a.inverse();
+        // // beta = a^((q^(k/2)-1)*(q+1))
+        // FieldT beta = a_unitary.Frobenius_map(1) * a_unitary;
+        // assert(beta.cyclotomic_squared() == beta.squared());
+
 
         const pA = pb.alloc(32*12);
         const pAf = pb.alloc(32*12);
@@ -399,5 +460,5 @@ describe("Basic tests for g1 in bn128", () => {
         assertEqualF12(resL, resR);
 
     });
-
+*/
 });
