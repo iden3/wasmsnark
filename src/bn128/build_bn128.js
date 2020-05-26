@@ -7,7 +7,6 @@ const buildF2m =require("../build_f2m.js");
 const buildF3m =require("../build_f3m.js");
 const buildCurve =require("../build_curve_jacobian_a0.js");
 const buildFFT = require("../build_fft");
-const buildMultiexp = require("../build_multiexp");
 const buildPol = require("../build_pol");
 const buildApplyKey = require("../build_applykey");
 
@@ -34,15 +33,69 @@ module.exports = function buildBN128(module, _prefix) {
     const f1mPrefix = buildF1m(module, q, "f1m");
     buildF1(module, r, "fr", "frm");
 
-    const g1mPrefix = buildCurve(module, "g1m", "f1m");
+    const pG1b = module.alloc(utils.bigInt2BytesLE( toMontgomery(bigInt(3)), f1size ));
+    const g1mPrefix = buildCurve(module, "g1m", "f1m", pG1b);
 
-    buildMultiexp(module, "g1m", "g1m", "f1m", "fr");
-    buildFFT(module, "fft", "frm");
+    buildFFT(module, "frm", "frm", "frm", "frm_mul");
+
+
     buildPol(module, "pol", "frm");
 
     const f2mPrefix = buildF2m(module, "f1m_neg", "f2m", "f1m");
-    const g2mPrefix = buildCurve(module, "g2m", "f2m");
-    buildMultiexp(module, "g2m", "g2m", "f2m", "fr");
+    const pG2b = module.alloc([
+        ...utils.bigInt2BytesLE( toMontgomery(bigInt("19485874751759354771024239261021720505790618469301721065564631296452457478373")), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(bigInt("266929791119991161246907387137283842545076965332900288569378510910307636690")), f1size )
+    ]);
+    const g2mPrefix = buildCurve(module, "g2m", "f2m", pG2b);
+
+
+    function buildG1TimesFr() {
+        const f = module.addFunction("g1m_timesFr");
+        f.addParam("pG1", "i32");
+        f.addParam("pFr", "i32");
+        f.addParam("pr", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const AUX = c.i32_const(module.alloc(n8));
+
+        f.addCode(
+            c.call("frm_fromMontgomery", c.getLocal("pFr"), AUX),
+            c.call(
+                "g1m_timesScalar",
+                c.getLocal("pG1"),
+                AUX,
+                c.i32_const(n8),
+                c.getLocal("pr")
+            )
+        );
+    }
+    buildG1TimesFr();
+    buildFFT(module, "g1m", "g1m", "frm", "g1m_timesFr");
+
+    function buildG2TimesFr() {
+        const f = module.addFunction("g2m_timesFr");
+        f.addParam("pG2", "i32");
+        f.addParam("pFr", "i32");
+        f.addParam("pr", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const AUX = c.i32_const(module.alloc(n8));
+
+        f.addCode(
+            c.call("frm_fromMontgomery", c.getLocal("pFr"), AUX),
+            c.call(
+                "g2m_timesScalar",
+                c.getLocal("pG2"),
+                AUX,
+                c.i32_const(n8),
+                c.getLocal("pr")
+            )
+        );
+    }
+    buildG2TimesFr();
+    buildFFT(module, "g2m", "g2m", "frm", "g2m_timesFr");
 
     buildApplyKey(module, "g1m", "frm");
     buildApplyKey(module, "g2m", "frm");

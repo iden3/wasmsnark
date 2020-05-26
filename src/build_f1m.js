@@ -22,6 +22,7 @@ const buildInt = require("./build_int.js");
 const utils = require("./utils.js");
 const buildExp = require("./build_timesscalar");
 const buildBatchInverse = require("./build_batchinverse");
+const buildBatchConvertion = require("./build_batchconvertion");
 
 module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
     const q = bigInt(_q);
@@ -1035,6 +1036,9 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
     buildLoad();
     buildTimesScalar();
     buildBatchInverse(module, prefix);
+    buildBatchConvertion(module, prefix + "_batchToMontgomery", prefix + "_toMontgomery", n8, n8);
+    buildBatchConvertion(module, prefix + "_batchFromMontgomery", prefix + "_fromMontgomery", n8, n8);
+
     module.exportFunction(prefix + "_add");
     module.exportFunction(prefix + "_sub");
     module.exportFunction(prefix + "_neg");
@@ -1068,6 +1072,8 @@ module.exports = function buildF1m(module, _q, _prefix, _intPrefix) {
         module.exportFunction(prefix + "_sqrt");
         module.exportFunction(prefix + "_isSquare");
     }
+    module.exportFunction(prefix + "_batchToMontgomery");
+    module.exportFunction(prefix + "_batchFromMontgomery");
     // console.log(module.functionIdxByName);
 
     return prefix;

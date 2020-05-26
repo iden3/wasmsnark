@@ -2,9 +2,10 @@ const assert = require("assert");
 const bigInt = require("big-integer");
 const buildBn128 = require("../src/bn128/build_bn128.js");
 const buildProtoboard = require("wasmbuilder").buildProtoboard;
+const bn128 = require("ffjavascript").bn128;
 
-
-describe("FFT tests", () => {
+describe("FFT tests", function () {
+    this.timeout(100000);
     let pb;
     const n8=32;
     before(async () => {
@@ -12,26 +13,147 @@ describe("FFT tests", () => {
             buildBn128(module);
         }, n8);
     });
-
-    it("create a basic FFT", async () => {
-        const N=4;
+    it("create a basic FFT in Fr", async () => {
+        const N=2048;
 
         const p = pb.alloc(n8*N);
         for (let i=0; i<N; i++) {
             pb.set(p+i*n8, i);
+            pb.frm_toMontgomery(p+i*n8, p+i*n8);
         }
 
-        pb.fft_toMontgomeryN(p, p, N);
-        pb.fft_fft(p, N);
-        pb.fft_ifft(p, N);
-        pb.fft_fromMontgomeryN(p, p, N);
+        pb.frm_fft(p, N);
 
+        pb.frm_ifft(p, N);
         for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(p+i*n8, p+i*n8);
             const a = pb.get(p+i*n8);
             assert.equal(a,i);
         }
+
     });
 
+    it("Encrypt + FFT == FFT + Encrypt ", async () => {
+        const N=32;
+        const pG1 = pb.bn128.pG1gen;
+
+        const pxA = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxA+i*n8, i+1);
+            pb.frm_toMontgomery(pxA+i*n8, pxA+i*n8);
+        }
+
+        const pGxA = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxA+i*n8, pxA+i*n8);
+            pb.g1m_timesScalarAffine(pG1, pxA+i*n8, n8, pGxA + (n8*3)*i);
+        }
+
+        pb.g1m_fft(pGxA, N);
+
+
+        const pxB = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxB+i*n8, i+1);
+            pb.frm_toMontgomery(pxB+i*n8, pxB+i*n8);
+        }
+
+        pb.frm_fft(pxB, N);
+
+        const pGxB = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxB+i*n8, pxB+i*n8);
+            pb.g1m_timesScalar(pG1, pxB+i*n8, n8, pGxB + (n8*3)*i);
+        }
+
+        for (let i=0; i<N; i++) {
+            assert(pb.g1m_eq(pGxA + (n8*3)*i, pGxB + (n8*3)*i));
+        }
+
+    });
+
+
+    it("Encrypt + iFFT == iFFT + Encrypt ", async () => {
+        const N=1024;
+        const pG1 = pb.bn128.pG1gen;
+
+        const pxA = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxA+i*n8, i+1);
+            pb.frm_toMontgomery(pxA+i*n8, pxA+i*n8);
+        }
+
+        const pGxA = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxA+i*n8, pxA+i*n8);
+            pb.g1m_timesScalarAffine(pG1, pxA+i*n8, n8, pGxA + (n8*3)*i);
+        }
+
+        pb.g1m_ifft(pGxA, N);
+
+
+        const pxB = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxB+i*n8, i+1);
+            pb.frm_toMontgomery(pxB+i*n8, pxB+i*n8);
+        }
+
+        pb.frm_ifft(pxB, N);
+
+        const pGxB = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxB+i*n8, pxB+i*n8);
+            pb.g1m_timesScalar(pG1, pxB+i*n8, n8, pGxB + (n8*3)*i);
+        }
+
+        for (let i=0; i<N; i++) {
+            assert(pb.g1m_eq(pGxA + (n8*3)*i, pGxB + (n8*3)*i));
+        }
+
+    });
+
+
+
+    it("Basic group iFFT", async () => {
+        const N=8;
+        const pG1 = pb.bn128.pG1gen;
+
+        const pxA = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxA+i*n8, i+1);
+            pb.frm_toMontgomery(pxA+i*n8, pxA+i*n8);
+        }
+
+        pb.frm_fft(pxA, N);
+
+        const pGxA = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxA+i*n8, pxA+i*n8);
+            pb.g1m_timesScalarAffine(pG1, pxA+i*n8, n8, pGxA + (n8*3)*i);
+        }
+
+        pb.g1m_ifft(pGxA, N);
+
+
+        const pxB = pb.alloc(n8*N);
+        for (let i=0; i<N; i++) {
+            pb.set(pxB+i*n8, i+1);
+            pb.frm_toMontgomery(pxB+i*n8, pxB+i*n8);
+        }
+
+        const pGxB = pb.alloc(n8*3*N);
+        for (let i=0; i<N; i++) {
+            pb.frm_fromMontgomery(pxB+i*n8, pxB+i*n8);
+            pb.g1m_timesScalar(pG1, pxB+i*n8, n8, pGxB + (n8*3)*i);
+        }
+
+        for (let i=0; i<N; i++) {
+            assert(pb.g1m_eq(pGxA + (n8*3)*i, pGxB + (n8*3)*i));
+        }
+
+    });
+
+/*
     it("create a do it reverselly FFT", async () => {
         const N=1024;
 
@@ -119,4 +241,6 @@ describe("FFT tests", () => {
         }
 
     });
+
+*/
 });

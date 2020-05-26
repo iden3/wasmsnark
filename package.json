@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "big-integer": "^1.6.42",
-    "blakejs": "^1.1.0"
+    "blakejs": "^1.1.0",
+    "ffjavascript": "^0.1.3"
   }
 }

@@ -20,15 +20,11 @@
 const bigInt = require("big-integer");
 const utils = require("./utils.js");
 
-module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
+module.exports = function buildFFT(module, prefix, f1mPrefix) {
 
-    const n64f = module.modules[fPrefix].n64;
-    const n8f = n64f*8;
-
-    const n64g = module.modules[gPrefix].n64;
-    const n8g = n64g*8;
-
-    const q = module.modules[fPrefix].q;
+    const n64 = module.modules[f1mPrefix].n64;
+    const n8 = n64*8;
+    const q = module.modules[f1mPrefix].q;
 
     let rem = q.minus(bigInt(1));
     let maxBits = 0;
@@ -51,11 +47,11 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
     }
 
     const bytes = [];
-    const R = bigInt(1).shiftLeft(n8f*8).mod(q);
+    const R = bigInt(1).shiftLeft(n8*8).mod(q);
 
     for (let i=0; i<w.length; i++) {
         const m = w[i].times(R).mod(q);
-        bytes.push(...utils.bigInt2BytesLE(m, n8f));
+        bytes.push(...utils.bigInt2BytesLE(m, n8));
     }
 
     const ROOTs = module.alloc(bytes);
@@ -70,7 +66,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
     const bytesi2 =[];
     for (let i=0; i<=maxBits; i++) {
         const m = i2[i].modInv(q).times(R).mod(q);
-        bytesi2.push(...utils.bigInt2BytesLE(m, n8f));
+        bytesi2.push(...utils.bigInt2BytesLE(m, n8));
     }
 
     const INV2 = module.alloc(bytesi2);
@@ -164,12 +160,11 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
         const f = module.addFunction(prefix+"_fft");
         f.addParam("px", "i32");
         f.addParam("n", "i32");
+        f.addParam("odd", "i32");
 
         f.addLocal("bits", "i32");
 
         const c = f.getCodeBuilder();
-
-        const One = c.i32_const(module.alloc(n8f));
 
         f.addCode(
             c.setLocal(
@@ -178,16 +173,16 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                     prefix + "__log2",
                     c.getLocal("n")
                 )
-            ),
-            c.call(fPrefix + "_one", One),
-            c.call(
-                prefix+"_rawfft",
-                c.getLocal("px"),
-                c.getLocal("bits"),
-                c.i32_const(0),
-                One
             )
         );
+
+
+        f.addCode(c.call(
+            prefix+"__rawfft",
+            c.getLocal("px"),
+            c.getLocal("bits"),
+            c.getLocal("odd"),
+        ));
 
     }
 
@@ -195,8 +190,8 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
         const f = module.addFunction(prefix+"_ifft");
         f.addParam("px", "i32");
         f.addParam("n", "i32");
+        f.addParam("odd", "i32");
         f.addLocal("bits", "i32");
-        f.addLocal("pInv2", "i32");
 
         const c = f.getCodeBuilder();
 
@@ -207,35 +202,29 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                     prefix + "__log2",
                     c.getLocal("n")
                 )
-            ),
-            c.setLocal(
-                "pInv2",
-                c.i32_add(
-                    c.i32_const(INV2),
-                    c.i32_mul(
-                        c.getLocal("bits"),
-                        c.i32_const(n8f)
-                    )
-                )
-            ),
-
-            c.call(
-                prefix+"_rawfft",
-                c.getLocal("px"),
-                c.getLocal("bits"),
-                c.i32_const(1),
-                c.getLocal("pInv2")
-            ),
+            )
         );
+
+        f.addCode(c.call(
+            prefix+"__rawfft",
+            c.getLocal("px"),
+            c.getLocal("bits"),
+            c.getLocal("odd")
+        ));
+
+        f.addCode(c.call(
+            prefix+"__finalInverse",
+            c.getLocal("px"),
+            c.getLocal("bits"),
+        ));
+
     }
 
     function buildRawFFT() {
-        const f = module.addFunction(prefix+"_rawfft");
+        const f = module.addFunction(prefix+"__rawfft");
         f.addParam("px", "i32");
-        f.addParam("bits", "i32"); // 2 power
-        f.addParam("reverse", "i32");
-        f.addParam("mulFactor", "i32");
-
+        f.addParam("bits", "i32");
+        f.addParam("odd", "i32");
         f.addLocal("s", "i32");
         f.addLocal("k", "i32");
         f.addLocal("j", "i32");
@@ -248,9 +237,9 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
 
         const c = f.getCodeBuilder();
 
-        const W = c.i32_const(module.alloc(n8f));
-        const T = c.i32_const(module.alloc(n8g));
-        const U = c.i32_const(module.alloc(n8g));
+        const W = c.i32_const(module.alloc(n8));
+        const T = c.i32_const(module.alloc(n8));
+        const U = c.i32_const(module.alloc(n8));
 
         f.addCode(
             c.call(prefix + "__reversePermutation", c.getLocal("px"), c.getLocal("bits")),
@@ -270,7 +259,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         c.i32_const(ROOTs),
                         c.i32_mul(
                             c.getLocal("s"),
-                            c.i32_const(n8f)
+                            c.i32_const(n8)
                         )
                     )
                 ),
@@ -284,7 +273,19 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         )
                     ),
 
-                    c.call(fPrefix + "_one", W),
+                    c.if(
+                        c.getLocal("odd"),
+                        c.call(
+                            f1mPrefix + "_copy",
+                            c.i32_add(
+                                c.getLocal("pwm"),
+                                c.i32_const(n8)
+                            ),
+                            W
+                        ),
+                        c.call(f1mPrefix + "_one", W)
+                    ),
+
 
                     c.setLocal("mdiv2", c.i32_shr_u(c.getLocal("m"), c.i32_const(1)) ),
                     c.setLocal("j", c.i32_const(0)),
@@ -306,7 +307,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                                         c.getLocal("k"),
                                         c.getLocal("j")
                                     ),
-                                    c.i32_const(n8g)
+                                    c.i32_const(n8)
                                 )
                             )
                         ),
@@ -317,40 +318,40 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                                 c.getLocal("idx1"),
                                 c.i32_mul(
                                     c.getLocal("mdiv2"),
-                                    c.i32_const(n8g)
+                                    c.i32_const(n8)
                                 )
                             )
                         ),
 
                         c.call(
-                            opGtimesF,
-                            c.getLocal("idx2"),
+                            f1mPrefix + "_mul",
                             W,
+                            c.getLocal("idx2"),
                             T
                         ),
 
                         c.call(
-                            gPrefix + "_copy",
+                            f1mPrefix + "_copy",
                             c.getLocal("idx1"),
                             U
                         ),
 
                         c.call(
-                            gPrefix + "_add",
+                            f1mPrefix + "_add",
                             U,
                             T,
                             c.getLocal("idx1"),
                         ),
 
                         c.call(
-                            gPrefix + "_sub",
+                            f1mPrefix + "_sub",
                             U,
                             T,
                             c.getLocal("idx2"),
                         ),
 
                         c.call(
-                            fPrefix + "_mul",
+                            f1mPrefix + "_mul",
                             W,
                             c.getLocal("pwm"),
                             W,
@@ -366,24 +367,190 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
 
                 c.setLocal("s", c.i32_add(c.getLocal("s"), c.i32_const(1))),
                 c.br(0)
-            )),
-            c.call(
-                prefix + "__fftFinal",
-                c.getLocal("px"),
-                c.getLocal("bits"),
-                c.getLocal("reverse"),
-                c.getLocal("mulFactor")
-            )
+            ))
+        );
+    }
+
+    function buildCopyInterleaved() {
+        const f = module.addFunction(prefix+"_copyNInterleaved");
+        f.addParam("ps", "i32");
+        f.addParam("pd", "i32");
+        f.addParam("n", "i32");
+        f.addLocal("pi", "i32");
+        f.addLocal("po", "i32");
+        f.addLocal("pn", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.setLocal("pi", c.getLocal("ps")),
+            c.setLocal("po", c.getLocal("pd")),
+            c.setLocal(
+                "pn",
+                c.i32_add(
+                    c.getLocal("ps"),
+                    c.i32_mul(
+                        c.getLocal("n"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
+            c.block(c.loop(
+                c.br_if(
+                    1,
+                    c.i32_eq(
+                        c.getLocal("pi"),
+                        c.getLocal("pn")
+                    )
+                ),
+
+                c.call(f1mPrefix + "_copy", c.getLocal("pi"), c.getLocal("po")),
+
+                c.setLocal("pi", c.i32_add(c.getLocal("pi"), c.i32_const(n8))),
+                c.setLocal("po", c.i32_add(c.getLocal("po"), c.i32_const(n8*2))),
+                c.br(0)
+            ))
+        );
+    }
+
+
+
+    function buildToMontgomery() {
+        const f = module.addFunction(prefix+"_toMontgomeryN");
+        f.addParam("ps", "i32");
+        f.addParam("pd", "i32");
+        f.addParam("n", "i32");
+        f.addLocal("pi", "i32");
+        f.addLocal("po", "i32");
+        f.addLocal("pn", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.setLocal("pi", c.getLocal("ps")),
+            c.setLocal("po", c.getLocal("pd")),
+            c.setLocal(
+                "pn",
+                c.i32_add(
+                    c.getLocal("ps"),
+                    c.i32_mul(
+                        c.getLocal("n"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
+            c.block(c.loop(
+                c.br_if(
+                    1,
+                    c.i32_eq(
+                        c.getLocal("pi"),
+                        c.getLocal("pn")
+                    )
+                ),
+
+                c.call(f1mPrefix + "_toMontgomery", c.getLocal("pi"), c.getLocal("po")),
+
+                c.setLocal("pi", c.i32_add(c.getLocal("pi"), c.i32_const(n8))),
+                c.setLocal("po", c.i32_add(c.getLocal("po"), c.i32_const(n8))),
+                c.br(0)
+            ))
+        );
+    }
+
+
+    function buildMulN() {
+        const f = module.addFunction(prefix+"_mulN");
+        f.addParam("px", "i32");
+        f.addParam("py", "i32");
+        f.addParam("n", "i32");
+        f.addParam("pd", "i32");
+        f.addLocal("pix", "i32");
+        f.addLocal("piy", "i32");
+        f.addLocal("po", "i32");
+        f.addLocal("lastpix", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.setLocal("pix", c.getLocal("px")),
+            c.setLocal("piy", c.getLocal("py")),
+            c.setLocal("po", c.getLocal("pd")),
+            c.setLocal(
+                "lastpix",
+                c.i32_add(
+                    c.getLocal("px"),
+                    c.i32_mul(
+                        c.getLocal("n"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
+            c.block(c.loop(
+                c.br_if(
+                    1,
+                    c.i32_eq(
+                        c.getLocal("pix"),
+                        c.getLocal("lastpix")
+                    )
+                ),
+
+                c.call(f1mPrefix + "_mul", c.getLocal("pix"), c.getLocal("piy"), c.getLocal("po")),
+
+                c.setLocal("pix", c.i32_add(c.getLocal("pix"), c.i32_const(n8))),
+                c.setLocal("piy", c.i32_add(c.getLocal("piy"), c.i32_const(n8))),
+                c.setLocal("po", c.i32_add(c.getLocal("po"), c.i32_const(n8))),
+                c.br(0)
+            ))
+        );
+    }
+
+    function buildFromMontgomery() {
+        const f = module.addFunction(prefix+"_fromMontgomeryN");
+        f.addParam("ps", "i32");
+        f.addParam("pd", "i32");
+        f.addParam("n", "i32");
+        f.addLocal("pi", "i32");
+        f.addLocal("po", "i32");
+        f.addLocal("pn", "i32");
+
+        const c = f.getCodeBuilder();
+
+        f.addCode(
+            c.setLocal("pi", c.getLocal("ps")),
+            c.setLocal("po", c.getLocal("pd")),
+            c.setLocal(
+                "pn",
+                c.i32_add(
+                    c.getLocal("ps"),
+                    c.i32_mul(
+                        c.getLocal("n"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
+            c.block(c.loop(
+                c.br_if(
+                    1,
+                    c.i32_eq(
+                        c.getLocal("pi"),
+                        c.getLocal("pn")
+                    )
+                ),
+
+                c.call(f1mPrefix + "_fromMontgomery", c.getLocal("pi"), c.getLocal("po")),
+
+                c.setLocal("pi", c.i32_add(c.getLocal("pi"), c.i32_const(n8))),
+                c.setLocal("po", c.i32_add(c.getLocal("po"), c.i32_const(n8))),
+                c.br(0)
+            ))
         );
     }
 
 
     function buildFinalInverse() {
-        const f = module.addFunction(prefix+"__fftFinal");
+        const f = module.addFunction(prefix+"__finalInverse");
         f.addParam("px", "i32");
         f.addParam("bits", "i32");
-        f.addParam("reverse", "i32");
-        f.addParam("mulFactor", "i32");
         f.addLocal("n", "i32");
         f.addLocal("ndiv2", "i32");
         f.addLocal("pInv2", "i32");
@@ -394,17 +561,21 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
 
         const c = f.getCodeBuilder();
 
-        const T = c.i32_const(module.alloc(n8g));
+        const T = c.i32_const(module.alloc(n8));
 
         f.addCode(
-            c.if(
-                c.i32_and(
-                    c.i32_eqz(c.getLocal("reverse")),
-                    c.call(fPrefix + "_isOne", c.getLocal("mulFactor"))
-                ),
-                c.ret([])
-            ),
             c.setLocal("n", c.i32_shl( c.i32_const(1), c.getLocal("bits"))),
+
+            c.setLocal(
+                "pInv2",
+                c.i32_add(
+                    c.i32_const(INV2),
+                    c.i32_mul(
+                        c.getLocal("bits"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
 
             c.setLocal("mask", c.i32_sub( c.getLocal("n") , c.i32_const(1))),
             c.setLocal("i", c.i32_const(1)),
@@ -429,7 +600,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         c.getLocal("px"),
                         c.i32_mul(
                             c.getLocal("i"),
-                            c.i32_const(n8g)
+                            c.i32_const(n8)
                         )
                     )
                 ),
@@ -442,61 +613,37 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                                 c.getLocal("n"),
                                 c.getLocal("i")
                             ),
-                            c.i32_const(n8g)
+                            c.i32_const(n8)
                         )
                     )
                 ),
 
-                c.if(
-                    c.getLocal("reverse"),
-                    c.if(
-                        c.call(fPrefix + "_isOne", c.getLocal("mulFactor")),
-                        [
-                            ...c.call(gPrefix + "_copy", c.getLocal("idx1"), T),
-                            ...c.call(gPrefix + "_copy", c.getLocal("idx2") , c.getLocal("idx1") ),
-                            ...c.call(gPrefix + "_copy", T , c.getLocal("idx2")),
-                        ],
-                        [
-                            ...c.call(gPrefix + "_copy", c.getLocal("idx1"), T),
-                            ...c.call(opGtimesF , c.getLocal("idx2") , c.getLocal("mulFactor"), c.getLocal("idx1") ),
-                            ...c.call(opGtimesF , T , c.getLocal("mulFactor"), c.getLocal("idx2")),
-                        ]
-                    ),
-                    c.if(
-                        c.call(fPrefix + "_isOne", c.getLocal("mulFactor")),
-                        [
-                            // Do nothing (It should not be here)
-                        ],
-                        [
-                            ...c.call(opGtimesF , c.getLocal("idx1") , c.getLocal("mulFactor"), c.getLocal("idx1") ),
-                            ...c.call(opGtimesF , c.getLocal("idx2") , c.getLocal("mulFactor"), c.getLocal("idx2")),
-                        ]
-                    )
-                ),
+                c.call(f1mPrefix + "_copy", c.getLocal("idx1"), T),
+                c.call(f1mPrefix + "_mul", c.getLocal("idx2") , c.getLocal("pInv2"), c.getLocal("idx1") ),
+                c.call(f1mPrefix + "_mul", T , c.getLocal("pInv2"), c.getLocal("idx2")),
+
+//                c.call(f1mPrefix + "_mul", c.getLocal("idx1") , c.getLocal("pInv2"), c.getLocal("idx1") ),
+//                c.call(f1mPrefix + "_mul", c.getLocal("idx2") , c.getLocal("pInv2"), c.getLocal("idx1") ),
+
                 c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
 
                 c.br(0)
             )),
 
-            c.if(
-                c.call(fPrefix + "_isOne", c.getLocal("mulFactor")),
-                [
-                    // Do nothing (It should not be here)
-                ],
-                [
-                    ...c.call(opGtimesF, c.getLocal("px") , c.getLocal("mulFactor"), c.getLocal("px")),
-                    ...c.setLocal("idx2",
-                        c.i32_add(
-                            c.getLocal("px"),
-                            c.i32_mul(
-                                c.getLocal("ndiv2"),
-                                c.i32_const(n8g)
-                            )
-                        )
-                    ),
-                    ...c.call(opGtimesF, c.getLocal("idx2"),c.getLocal("mulFactor"), c.getLocal("idx2"))
-                ]
-            )
+            c.call(f1mPrefix + "_mul", c.getLocal("px") , c.getLocal("pInv2"), c.getLocal("px")),
+
+            c.setLocal("idx2",
+                c.i32_add(
+                    c.getLocal("px"),
+                    c.i32_mul(
+                        c.getLocal("ndiv2"),
+                        c.i32_const(n8)
+                    )
+                )
+            ),
+
+            c.call(f1mPrefix + "_mul", c.getLocal("idx2"),c.getLocal("pInv2"), c.getLocal("idx2"))
+
         );
     }
 
@@ -512,7 +659,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
 
         const c = f.getCodeBuilder();
 
-        const T = c.i32_const(module.alloc(n8g));
+        const T = c.i32_const(module.alloc(n8));
 
         f.addCode(
             c.setLocal("n", c.i32_shl( c.i32_const(1), c.getLocal("bits"))),
@@ -531,7 +678,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         c.getLocal("px"),
                         c.i32_mul(
                             c.getLocal("i"),
-                            c.i32_const(n8g)
+                            c.i32_const(n8)
                         )
                     )
                 ),
@@ -543,7 +690,7 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         c.getLocal("px"),
                         c.i32_mul(
                             c.getLocal("ri"),
-                            c.i32_const(n8g)
+                            c.i32_const(n8)
                         )
                     )
                 ),
@@ -554,9 +701,9 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
                         c.getLocal("ri")
                     ),
                     [
-                        ...c.call(gPrefix + "_copy", c.getLocal("idx1"), T),
-                        ...c.call(gPrefix + "_copy", c.getLocal("idx2") , c.getLocal("idx1")),
-                        ...c.call(gPrefix + "_copy", T , c.getLocal("idx2"))
+                        ...c.call(f1mPrefix + "_copy", c.getLocal("idx1"), T),
+                        ...c.call(f1mPrefix + "_copy", c.getLocal("idx2") , c.getLocal("idx1")),
+                        ...c.call(f1mPrefix + "_copy", T , c.getLocal("idx2"))
                     ]
                 ),
 
@@ -639,190 +786,23 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
     }
 
 
-    function buildFFTJoin() {
-        const f = module.addFunction(prefix+"_fftJoin");
-        f.addParam("pBuff1", "i32");
-        f.addParam("pBuff2", "i32");
-        f.addParam("n", "i32");
-        f.addParam("first", "i32");
-        f.addParam("inc", "i32");
-        f.addLocal("idx1", "i32");
-        f.addLocal("idx2", "i32");
-        f.addLocal("i", "i32");
-
-        const c = f.getCodeBuilder();
-
-        const W = c.i32_const(module.alloc(n8f));
-        const T = c.i32_const(module.alloc(n8g));
-        const U = c.i32_const(module.alloc(n8g));
-
-        f.addCode(
-            c.call( fPrefix + "_copy", c.getLocal("first"), W),
-            c.setLocal("i", c.i32_const(0)),
-            c.block(c.loop(
-                c.br_if(
-                    1,
-                    c.i32_eq(
-                        c.getLocal("i"),
-                        c.getLocal("n")
-                    )
-                ),
-
-                c.setLocal(
-                    "idx1",
-                    c.i32_add(
-                        c.getLocal("pBuff1"),
-                        c.i32_mul(
-                            c.getLocal("i"),
-                            c.i32_const(n8g)
-                        )
-                    )
-                ),
-
-                c.setLocal(
-                    "idx2",
-                    c.i32_add(
-                        c.getLocal("pBuff2"),
-                        c.i32_mul(
-                            c.getLocal("i"),
-                            c.i32_const(n8g)
-                        )
-                    )
-                ),
-
-                c.call(
-                    opGtimesF,
-                    c.getLocal("idx2"),
-                    W,
-                    T
-                ),
-
-                c.call(
-                    gPrefix + "_copy",
-                    c.getLocal("idx1"),
-                    U
-                ),
-
-                c.call(
-                    gPrefix + "_add",
-                    U,
-                    T,
-                    c.getLocal("idx1"),
-                ),
-
-                c.call(
-                    gPrefix + "_sub",
-                    U,
-                    T,
-                    c.getLocal("idx2"),
-                ),
-
-                c.call(
-                    fPrefix + "_mul",
-                    W,
-                    c.getLocal("inc"),
-                    W,
-                ),
-
-                c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
-                c.br(0)
-            ))
-        );
-    }
-
-    // Reverse all and multiply by factor
-    function buildFFTFinal() {
-        const f = module.addFunction(prefix+"_fftFinal");
-        f.addParam("pBuff", "i32");
-        f.addParam("n", "i32");
-        f.addParam("factor", "i32");
-        f.addLocal("idx1", "i32");
-        f.addLocal("idx2", "i32");
-        f.addLocal("i", "i32");
-
-        const c = f.getCodeBuilder();
-
-        const T = c.i32_const(module.alloc(n8g));
-
-        f.addCode(
-            c.setLocal("i", c.i32_const(0)),
-            c.block(c.loop(
-                c.br_if(
-                    1,
-                    c.i32_eq(
-                        c.getLocal("i"),
-                        c.getLocal("n")
-                    )
-                ),
-
-                c.setLocal(
-                    "idx1",
-                    c.i32_add(
-                        c.getLocal("pBuff"),
-                        c.i32_mul(
-                            c.getLocal("i"),
-                            c.i32_const(n8g)
-                        )
-                    )
-                ),
-
-                c.setLocal(
-                    "idx2",
-                    c.i32_add(
-                        c.getLocal("pBuff"),
-                        c.i32_mul(
-                            c.i32_sub(
-                                c.i32_sub(
-                                    c.getLocal("n"),
-                                    c.i32_const(1)
-                                ),
-                                c.getLocal("i")
-                            ),
-                            c.i32_const(n8g)
-                        )
-                    )
-                ),
-
-                c.call(
-                    opGtimesF,
-                    c.getLocal("idx2"),
-                    c.getLocal("factor"),
-                    T
-                ),
-
-                c.call(
-                    opGtimesF,
-                    c.getLocal("idx1"),
-                    c.getLocal("factor"),
-                    c.getLocal("idx2"),
-                ),
-
-                c.call(
-                    gPrefix + "_copy",
-                    T,
-                    c.getLocal("idx1"),
-                ),
-
-                c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
-                c.br(0)
-            ))
-        );
-    }
-
     buildRev();
     buildReversePermutation();
-    buildFinalInverse();
     buildRawFFT();
+    buildCopyInterleaved();
+    buildFromMontgomery();
+    buildToMontgomery();
+    buildFinalInverse();
     buildLog2();
     buildFFT();
     buildIFFT();
-    buildFFTJoin();
-    buildFFTFinal();
+    buildMulN();
 
     module.exportFunction(prefix+"_fft");
     module.exportFunction(prefix+"_ifft");
-    module.exportFunction(prefix+"_rawfft");
-    module.exportFunction(prefix+"_fftJoin");
-    module.exportFunction(prefix+"_fftFinal");
+    module.exportFunction(prefix+"_toMontgomeryN");
+    module.exportFunction(prefix+"_fromMontgomeryN");
+    module.exportFunction(prefix+"_copyNInterleaved");
+    module.exportFunction(prefix+"_mulN");
 
 };

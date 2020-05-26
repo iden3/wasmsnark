@@ -21,25 +21,34 @@ module.exports = function buildBLS12381(module, _prefix) {
     const q = bigInt("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
     const r = bigInt("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);
 
-    const n64 = Math.floor((q.minus(1).bitLength() - 1)/64) +1;
-    const n8 = n64*8;
-    const frsize = n8;
-    const f1size = n8;
+    const n64q = Math.floor((q.minus(1).bitLength() - 1)/64) +1;
+    const n8q = n64q*8;
+    const f1size = n8q;
     const f2size = f1size * 2;
     const f6size = f1size * 6;
     const ftsize = f1size * 12;
+
+    const n64r = Math.floor((r.minus(1).bitLength() - 1)/64) +1;
+    const n8r = n64r*8;
+    const frsize = n8r;
+
 
     const pr = module.alloc(utils.bigInt2BytesLE( r, frsize ));
 
     const f1mPrefix = buildF1m(module, q, "f1m");
     buildF1(module, r, "fr", "frm");
-    const g1mPrefix = buildCurve(module, "g1m", "f1m");
+    const pG1b = module.alloc(utils.bigInt2BytesLE( toMontgomery(bigInt(4)), f1size ));
+    const g1mPrefix = buildCurve(module, "g1m", "f1m", pG1b);
     buildMultiexp(module, "g1m", "g1m", "f1m", "fr");
     buildFFT(module, "fft", "frm");
     buildPol(module, "pol", "frm");
 
     const f2mPrefix = buildF2m(module, "f1m_neg", "f2m", "f1m");
-    const g2mPrefix = buildCurve(module, "g2m", "f2m");
+    const pG2b = module.alloc([
+        ...utils.bigInt2BytesLE( toMontgomery(bigInt("4")), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(bigInt("4")), f1size )
+    ]);
+    const g2mPrefix = buildCurve(module, "g2m", "f2m", pG2b);
     buildMultiexp(module, "g2m", "g2m", "f2m", "fr");
 
 
@@ -193,18 +202,18 @@ module.exports = function buildBLS12381(module, _prefix) {
             ),
             c.call(
                 f2mPrefix + "_mulNR",
-                c.i32_add(c.getLocal("x"), c.i32_const(n8*4)),
+                c.i32_add(c.getLocal("x"), c.i32_const(n8q*4)),
                 c.getLocal("pr")
             ),
             c.call(
                 f2mPrefix + "_copy",
-                c.i32_add(c.getLocal("x"), c.i32_const(n8*2)),
-                c.i32_add(c.getLocal("pr"), c.i32_const(n8*4)),
+                c.i32_add(c.getLocal("x"), c.i32_const(n8q*2)),
+                c.i32_add(c.getLocal("pr"), c.i32_const(n8q*4)),
             ),
             c.call(
                 f2mPrefix + "_copy",
                 c0copy,
-                c.i32_add(c.getLocal("pr"), c.i32_const(n8*2)),
+                c.i32_add(c.getLocal("pr"), c.i32_const(n8q*2)),
             ),
         );
     }
@@ -213,7 +222,10 @@ module.exports = function buildBLS12381(module, _prefix) {
     const ftmPrefix = buildF2m(module, f6mPrefix+"_mulNR", "ftm", f6mPrefix);
 
     module.modules[prefix] = {
-        n64: n64,
+        n64q: n64q,
+        n64r: n64r,
+        n8q: n8q,
+        n8r: n8r,
         pG1gen: pG1gen,
         pG1zero: pG1zero,
         pG2gen: pG2gen,
@@ -234,8 +246,8 @@ module.exports = function buildBLS12381(module, _prefix) {
     const ateNDblCoefs = ateLoopBitBytes.length-1;
     const ateNAddCoefs = ateLoopBitBytes.reduce((acc, b) =>  acc + ( b!=0 ? 1 : 0)   ,0);
     const ateNCoefs = ateNAddCoefs + ateNDblCoefs + 1;
-    const prePSize = 3*2*n8;
-    const preQSize = 3*n8*2 + ateNCoefs*ateCoefSize;
+    const prePSize = 3*2*n8q;
+    const preQSize = 3*n8q*2 + ateNCoefs*ateCoefSize;
     const finalExpIsNegative = true;
 
     const finalExpZ = bigInt("15132376222941642752");
@@ -292,12 +304,12 @@ module.exports = function buildBLS12381(module, _prefix) {
         const c = f.getCodeBuilder();
 
         const Rx  = c.getLocal("R");
-        const Ry  = c.i32_add(c.getLocal("R"), c.i32_const(2*n8));
-        const Rz  = c.i32_add(c.getLocal("R"), c.i32_const(4*n8));
+        const Ry  = c.i32_add(c.getLocal("R"), c.i32_const(2*n8q));
+        const Rz  = c.i32_add(c.getLocal("R"), c.i32_const(4*n8q));
 
         const t0  = c.getLocal("r");
-        const t3  = c.i32_add(c.getLocal("r"), c.i32_const(2*n8));
-        const t6  = c.i32_add(c.getLocal("r"), c.i32_const(4*n8));
+        const t3  = c.i32_add(c.getLocal("r"), c.i32_const(2*n8q));
+        const t6  = c.i32_add(c.getLocal("r"), c.i32_const(4*n8q));
 
 
         const zsquared = c.i32_const(module.alloc(f2size));
@@ -406,15 +418,15 @@ module.exports = function buildBLS12381(module, _prefix) {
         const c = f.getCodeBuilder();
 
         const Rx  = c.getLocal("R");
-        const Ry  = c.i32_add(c.getLocal("R"), c.i32_const(2*n8));
-        const Rz  = c.i32_add(c.getLocal("R"), c.i32_const(4*n8));
+        const Ry  = c.i32_add(c.getLocal("R"), c.i32_const(2*n8q));
+        const Rz  = c.i32_add(c.getLocal("R"), c.i32_const(4*n8q));
 
         const Qx  = c.getLocal("Q");
-        const Qy  = c.i32_add(c.getLocal("Q"), c.i32_const(2*n8));
+        const Qy  = c.i32_add(c.getLocal("Q"), c.i32_const(2*n8q));
 
         const t10  = c.getLocal("r");
-        const t1  = c.i32_add(c.getLocal("r"), c.i32_const(2*n8));
-        const t9  = c.i32_add(c.getLocal("r"), c.i32_const(4*n8));
+        const t1  = c.i32_add(c.getLocal("r"), c.i32_const(2*n8q));
+        const t9  = c.i32_add(c.getLocal("r"), c.i32_const(4*n8q));
 
         const zsquared = c.i32_const(module.alloc(f2size));
         const ysquared = c.i32_const(module.alloc(f2size));
@@ -676,7 +688,7 @@ module.exports = function buildBLS12381(module, _prefix) {
 
         );
     }
-    buildF6Mul01()
+    buildF6Mul01();
 
 
     function buildF12Mul014() {
@@ -747,7 +759,7 @@ module.exports = function buildBLS12381(module, _prefix) {
         const c = f.getCodeBuilder();
 
         const Px  = c.getLocal("pP");
-        const Py  = c.i32_add(c.getLocal("pP"), c.i32_const(n8));
+        const Py  = c.i32_add(c.getLocal("pP"), c.i32_const(n8q));
 
         const F  = c.getLocal("pF");
 
@@ -928,8 +940,8 @@ module.exports = function buildBLS12381(module, _prefix) {
             const Rc1 = c.i32_add(c.getLocal("r"), c.i32_const(i*f2size + f1size));
             const coef = mul2(F12[Math.floor(i/3)][n%12] , F6[i%3][n%6]);
             const pCoef = module.alloc([
-                ...utils.bigInt2BytesLE(toMontgomery(coef[0]), n8),
-                ...utils.bigInt2BytesLE(toMontgomery(coef[1]), n8),
+                ...utils.bigInt2BytesLE(toMontgomery(coef[0]), n8q),
+                ...utils.bigInt2BytesLE(toMontgomery(coef[1]), n8q),
             ]);
             if (n%2 == 1) {
                 f.addCode(

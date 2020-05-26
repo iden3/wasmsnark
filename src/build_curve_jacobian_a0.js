@@ -19,8 +19,10 @@
 
 const buildTimesScalarNAF = require("./build_timesscalarnaf");
 //const buildTimesScalar = require("./build_timesscalar");
+const buildBatchConvertion = require("./build_batchconvertion");
+const buildMultiexp = require("./build_multiexp");
 
-module.exports = function buildCurve(module, prefix, prefixField) {
+module.exports = function buildCurve(module, prefix, prefixField, pB) {
 
 
     const n64 = module.modules[prefixField].n64;
@@ -1019,9 +1021,9 @@ module.exports = function buildCurve(module, prefix, prefixField) {
         const z3 = c.i32_add(c.getLocal("pr"), c.i32_const(n8*2));
 
         f.addCode(
-            c.call(prefixField + "_copy", x, x3),
+            c.call(prefixField + "_one", z3),
             c.call(prefixField + "_copy", y, y3),
-            c.call(prefixField + "_one", z3)
+            c.call(prefixField + "_copy", x, x3)
         );
     }
 
@@ -1037,6 +1039,8 @@ module.exports = function buildCurve(module, prefix, prefixField) {
         f.addLocal("i", "i32");
 
         const c = f.getCodeBuilder();
+
+        const tmp = c.i32_const(module.alloc(n8));
 
         f.addCode(
             c.setLocal("pAux", c.i32_load( c.i32_const(0) )),
@@ -1075,7 +1079,7 @@ module.exports = function buildCurve(module, prefix, prefixField) {
                             prefixField+"_mul",
                             c.getLocal("itAux"),
                             c.i32_add(c.getLocal("itIn"), c.i32_const(n8)),
-                            c.i32_add(c.getLocal("itOut"), c.i32_const(n8)),
+                            tmp,
                         ),
                         ...c.call(
                             prefixField+"_square",
@@ -1091,7 +1095,7 @@ module.exports = function buildCurve(module, prefix, prefixField) {
                         ...c.call(
                             prefixField+"_mul",
                             c.getLocal("itAux"),
-                            c.i32_add(c.getLocal("itOut"), c.i32_const(n8)),
+                            tmp,
                             c.i32_add(c.getLocal("itOut"), c.i32_const(n8)),
                         ),
                     ]
@@ -1212,36 +1216,89 @@ module.exports = function buildCurve(module, prefix, prefixField) {
         );
     }
 
-
-    function buildBatchConversion(fnName, sizeIn, sizeOut) {
-
-        const f = module.addFunction(prefix + "_batch" + fnName);
+    function buildUtoLEM() {
+        const f = module.addFunction(prefix + "_UtoLEM");
         f.addParam("pIn", "i32");
-        f.addParam("n", "i32");
         f.addParam("pOut", "i32");
-        f.addLocal("i", "i32");
-        f.addLocal("itIn", "i32");
-        f.addLocal("itOut", "i32");
 
         const c = f.getCodeBuilder();
 
+        const pTmp = module.alloc(n8*2);
+        const tmp = c.i32_const(pTmp);
+        const tmpX = c.i32_const(pTmp);
+        const tmpY = c.i32_const(pTmp + n8);
+
         f.addCode(
-            c.setLocal("itIn", c.getLocal("pIn")),
-            c.setLocal("itOut", c.getLocal("pOut")),
-            c.setLocal("i", c.i32_const(0)),
-            c.block(c.loop(
-                c.br_if(1, c.i32_eq ( c.getLocal("i"), c.getLocal("n") )),
-
-                c.call(prefix + "_" + fnName, c.getLocal("itIn"), c.getLocal("itOut")),
-
-                c.setLocal("itIn", c.i32_add(c.getLocal("itIn"), c.i32_const(sizeIn))),
-                c.setLocal("itOut", c.i32_add(c.getLocal("itOut"), c.i32_const(sizeOut))),
-                c.setLocal("i", c.i32_add(c.getLocal("i"), c.i32_const(1))),
-                c.br(0)
-            )),
+            c.call(prefix + "__reverseBytes", c.getLocal("pIn"), c.i32_const(n8), tmpX),
+            c.call(prefix + "__reverseBytes", c.i32_add(c.getLocal("pIn"), c.i32_const(n8)), c.i32_const(n8), tmpY),
+            c.call(prefix + "_toMontgomeryAffine", tmp,  c.getLocal("pOut"))
         );
     }
 
+    function buildCtoLEM() {
+        const f = module.addFunction(prefix + "_CtoLEM");
+        f.addParam("pIn", "i32");
+        f.addParam("pOut", "i32");
+        f.addLocal("firstByte", "i32");
+        f.addLocal("greatest", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const pTmp = module.alloc(n8*2);
+        const tmpX = c.i32_const(pTmp);
+        const tmpY = c.i32_const(pTmp + n8);
+
+        f.addCode(
+            c.setLocal("firstByte", c.i32_load8_u(c.getLocal("pIn"))),
+            c.if(
+                c.i32_and(
+                    c.getLocal("firstByte"),
+                    c.i32_const(0x40)
+                ),
+                [
+                    ...c.call(prefix + "_zeroAffine", c.getLocal("pOut")),
+                    ...c.ret([])
+                ]
+            ),
+            c.setLocal(
+                "greatest",
+                c.i32_and(
+                    c.getLocal("firstByte"),
+                    c.i32_const(0x80)
+                )
+            ),
+
+            c.call(prefixField + "_copy", c.getLocal("pIn"), tmpY),
+            c.i32_store8(tmpY, c.i32_and(c.getLocal("firstByte"), c.i32_const(0x3F))),
+            c.call(prefix + "__reverseBytes", tmpY, c.i32_const(n8), tmpX),
+            c.call(prefixField + "_toMontgomery", tmpX, c.getLocal("pOut")),
+
+            c.call(prefixField + "_square", c.getLocal("pOut"), tmpY),
+            c.call(prefixField + "_mul", c.getLocal("pOut"), tmpY,  tmpY),
+            c.call(prefixField + "_add", tmpY, c.i32_const(pB),  tmpY),
+
+            c.call(prefixField + "_sqrt", tmpY, tmpY),
+            c.call(prefixField + "_neg", tmpY, tmpX),
+
+            c.if(
+                c.i32_eq(
+                    c.call(prefixField + "_sign", tmpY),
+                    c.i32_const(-1)
+                ),
+                c.if(
+                    c.getLocal("greatest"),
+                    c.call(prefixField + "_copy", tmpY, c.i32_add(c.getLocal("pOut"), c.i32_const(n8))),
+                    c.call(prefixField + "_neg", tmpY, c.i32_add(c.getLocal("pOut"), c.i32_const(n8)))
+                ),
+                c.if(
+                    c.getLocal("greatest"),
+                    c.call(prefixField + "_neg", tmpY, c.i32_add(c.getLocal("pOut"), c.i32_const(n8))),
+                    c.call(prefixField + "_copy", tmpY, c.i32_add(c.getLocal("pOut"), c.i32_const(n8)))
+                ),
+            )
+
+        );
+    }
 
     buildIsZeroAffine();
     buildIsZero();
@@ -1278,10 +1335,18 @@ module.exports = function buildCurve(module, prefix, prefixField) {
 
     buildLEMtoU();
     buildLEMtoC();
+    buildUtoLEM();
+    buildCtoLEM();
 
-    buildBatchConversion("LEMtoU", n8*2, n8*2);
-    buildBatchConversion("LEMtoC", n8*2, n8);
+    buildBatchConvertion(module, prefix + "_batchLEMtoU", prefix + "_LEMtoU", n8*2, n8*2);
+    buildBatchConvertion(module, prefix + "_batchLEMtoC", prefix + "_LEMtoC", n8*2, n8);
+    buildBatchConvertion(module, prefix + "_batchUtoLEM", prefix + "_UtoLEM", n8*2, n8*2);
+    buildBatchConvertion(module, prefix + "_batchCtoLEM", prefix + "_CtoLEM", n8, n8*2, true);
 
+    buildBatchConvertion(module, prefix + "_batchToJacobian", prefix + "_toJacobian", n8*2, n8*3, true);
+
+    buildMultiexp(module, prefix, prefix + "_multiexp", prefix + "_add", n8*3);
+    buildMultiexp(module, prefix, prefix + "_multiexpAffine", prefix + "_addMixed", n8*2);
 
     /*
     buildTimesScalar(
@@ -1355,15 +1420,24 @@ module.exports = function buildCurve(module, prefix, prefixField) {
     module.exportFunction(prefix + "_normalize");
 
     // Convertion functions
+    module.exportFunction(prefix + "_LEMtoU");
+    module.exportFunction(prefix + "_LEMtoC");
+    module.exportFunction(prefix + "_UtoLEM");
+    module.exportFunction(prefix + "_CtoLEM");
 
     module.exportFunction(prefix + "_batchLEMtoU");
     module.exportFunction(prefix + "_batchLEMtoC");
+    module.exportFunction(prefix + "_batchUtoLEM");
+    module.exportFunction(prefix + "_batchCtoLEM");
 
     module.exportFunction(prefix + "_toAffine");
     module.exportFunction(prefix + "_toJacobian");
 
     module.exportFunction(prefix + "_batchToAffine");
+    module.exportFunction(prefix + "_batchToJacobian");
 
+    module.exportFunction(prefix + "_multiexp");
+    module.exportFunction(prefix + "_multiexpAffine");
     /*
     buildG1MulScalar(module, zq);
     module.exportFunction("g1MulScalar");
