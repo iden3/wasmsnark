@@ -94,7 +94,7 @@ describe("Basic tests for g1 in bn128", () => {
             buildBn128(module);
         }, n8);
     });
-/*
+
     it("It should do a basic point doubling adding G1", async () => {
         const pG1 = pb.bn128.pG1gen;
 
@@ -497,7 +497,7 @@ describe("Basic tests for g1 in bn128", () => {
         console.log(bn128);
 
     });
-*/
+
     it("Should test compress and decompress in G1", async () => {
         const N=10;
         const pScalar = pb.alloc(n8);

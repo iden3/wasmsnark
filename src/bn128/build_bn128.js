@@ -288,6 +288,9 @@ module.exports = function buildBN128(module, _prefix) {
     const preQSize = 3*n8*2 + ateNCoefs*ateCoefSize;
     const finalExpIsNegative = false;
 
+    // console.log("PrePSize: " +prePSize);
+    // console.log("PreQSize: " +preQSize);
+
     const finalExpZ = bigInt("4965661367192848881");
 
     function naf(n) {

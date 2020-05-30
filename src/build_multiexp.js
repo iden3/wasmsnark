@@ -115,8 +115,20 @@ module.exports = function buildMultiexp(module, prefix, fnName, opAdd, n8b) {
 
         const c = f.getCodeBuilder();
 
+        const pTSizes = module.alloc([
+            17, 17, 17, 17,   17, 17, 17, 17,
+            17, 17, 16, 16,   15, 14, 13, 13,
+            12, 11, 10,  9,    8,  7,  7,  6,
+            5 ,  4,  3,  2,    1,  1,  1,  1
+        ]);
+
         f.addCode(
-            c.setLocal("chunkSize", c.i32_const(16)),    // At the moment set it to 22 and adapt in function of n
+            c.call(prefix + "_zero", c.getLocal("pr")),
+            c.if(
+                c.i32_eqz(c.getLocal("n")),
+                c.ret([])
+            ),
+            c.setLocal("chunkSize", c.i32_load8_u( c.i32_clz(c.getLocal("n")),  pTSizes )),
             c.setLocal(
                 "nChunks",
                 c.i32_add(
@@ -155,8 +167,6 @@ module.exports = function buildMultiexp(module, prefix, fnName, opAdd, n8b) {
                     )
                 )
             ),
-
-            c.call(prefix + "_zero", c.getLocal("pr")),
 
             c.setLocal(
                 "itBit",
