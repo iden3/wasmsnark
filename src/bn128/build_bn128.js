@@ -8,6 +8,7 @@ const buildF3m =require("../build_f3m.js");
 const buildCurve =require("../build_curve_jacobian_a0.js");
 const buildFFT = require("../build_fft");
 const buildPol = require("../build_pol");
+const buildQAP = require("../build_qap");
 const buildApplyKey = require("../build_applykey");
 
 module.exports = function buildBN128(module, _prefix) {
@@ -38,8 +39,8 @@ module.exports = function buildBN128(module, _prefix) {
 
     buildFFT(module, "frm", "frm", "frm", "frm_mul");
 
-
     buildPol(module, "pol", "frm");
+    buildQAP(module, "qap", "frm");
 
     const f2mPrefix = buildF2m(module, "f1m_neg", "f2m", "f1m");
     const pG2b = module.alloc([
@@ -49,9 +50,9 @@ module.exports = function buildBN128(module, _prefix) {
     const g2mPrefix = buildCurve(module, "g2m", "f2m", pG2b);
 
 
-    function buildG1TimesFr() {
-        const f = module.addFunction("g1m_timesFr");
-        f.addParam("pG1", "i32");
+    function buildGTimesFr(fnName, opMul) {
+        const f = module.addFunction(fnName);
+        f.addParam("pG", "i32");
         f.addParam("pFr", "i32");
         f.addParam("pr", "i32");
 
@@ -62,45 +63,26 @@ module.exports = function buildBN128(module, _prefix) {
         f.addCode(
             c.call("frm_fromMontgomery", c.getLocal("pFr"), AUX),
             c.call(
-                "g1m_timesScalar",
-                c.getLocal("pG1"),
+                opMul,
+                c.getLocal("pG"),
                 AUX,
                 c.i32_const(n8),
                 c.getLocal("pr")
             )
         );
     }
-    buildG1TimesFr();
+    buildGTimesFr("g1m_timesFr", "g1m_timesScalar");
     buildFFT(module, "g1m", "g1m", "frm", "g1m_timesFr");
 
-    function buildG2TimesFr() {
-        const f = module.addFunction("g2m_timesFr");
-        f.addParam("pG2", "i32");
-        f.addParam("pFr", "i32");
-        f.addParam("pr", "i32");
-
-        const c = f.getCodeBuilder();
-
-        const AUX = c.i32_const(module.alloc(n8));
-
-        f.addCode(
-            c.call("frm_fromMontgomery", c.getLocal("pFr"), AUX),
-            c.call(
-                "g2m_timesScalar",
-                c.getLocal("pG2"),
-                AUX,
-                c.i32_const(n8),
-                c.getLocal("pr")
-            )
-        );
-    }
-    buildG2TimesFr();
+    buildGTimesFr("g2m_timesFr", "g2m_timesScalar");
     buildFFT(module, "g2m", "g2m", "frm", "g2m_timesFr");
 
-    buildApplyKey(module, "g1m", "frm");
-    buildApplyKey(module, "g2m", "frm");
+    buildGTimesFr("g1m_timesFrAffine", "g1m_timesScalarAffine");
+    buildGTimesFr("g2m_timesFrAffine", "g2m_timesScalarAffine");
 
-
+    buildApplyKey(module, "frm_batchApplyKey", "fmr", "frm", n8, n8, n8, "frm_mul");
+    buildApplyKey(module, "g1m_batchApplyKeyMixed", "g1m", "frm", n8*2, n8*3, n8, "g1m_timesFrAffine");
+    buildApplyKey(module, "g2m_batchApplyKeyMixed", "g2m", "frm", n8*2*2, n8*3*2, n8, "g2m_timesFrAffine");
 
     function toMontgomery(a) {
         return bigInt(a).times( bigInt.one.shiftLeft(f1size*8)).mod(q);
@@ -1433,9 +1415,6 @@ module.exports = function buildBN128(module, _prefix) {
     module.exportFunction(prefix + "__mulBy024Old");
     module.exportFunction(prefix + "__cyclotomicSquare");
     module.exportFunction(prefix + "__cyclotomicExp_w0");
-
-    module.exportFunction("g1m_batchApplyKey");
-    module.exportFunction("g2m_batchApplyKey");
 
     console.log(module.functionIdxByName);
 

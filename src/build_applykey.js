@@ -19,9 +19,9 @@
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-module.exports = function buildApplyKey(module, gPrefix, frPrefix) {
+module.exports = function buildApplyKey(module, fnName, gPrefix, frPrefix, sizeGIn, sizeGOut, sizeF, opGtimesF) {
 
-    const f = module.addFunction(gPrefix + "_batchApplyKey");
+    const f = module.addFunction(fnName);
     f.addParam("pIn", "i32");
     f.addParam("n", "i32");
     f.addParam("pFirst", "i32");
@@ -32,30 +32,13 @@ module.exports = function buildApplyKey(module, gPrefix, frPrefix) {
     f.addLocal("pFrom", "i32");
     f.addLocal("pTo", "i32");
 
-    const FrN64 = module.modules[frPrefix].n64;
-    const sGOut = module.modules[gPrefix].n64*8;
-    const sGIn = sGOut*2/3;
-
     const c = f.getCodeBuilder();
 
-    const t = c.i32_const(module.alloc(FrN64));
-
-
-    // Alloc Memory for Working Space
-    f.addCode(
-        c.setLocal("pOldFree", c.i32_load( c.i32_const(0) )),
-        c.i32_store(
-            c.i32_const(0),
-            c.i32_add(
-                c.getLocal( "pOldFree" ),
-                c.i32_mul(c.getLocal("n"), c.i32_const(sGOut))
-            )
-        )
-    );
+    const t = c.i32_const(module.alloc(sizeF));
 
     f.addCode(
         c.setLocal("pFrom", c.getLocal("pIn")),
-        c.setLocal("pTo", c.getLocal("pOldFree")),
+        c.setLocal("pTo", c.getLocal("pOut")),
     );
 
     // t = first
@@ -71,18 +54,14 @@ module.exports = function buildApplyKey(module, gPrefix, frPrefix) {
         c.block(c.loop(
             c.br_if(1, c.i32_eq ( c.getLocal("i"), c.getLocal("n") )),
 
-            c.call( frPrefix + "_fromMontgomery", t, t),
             c.call(
-                gPrefix + "_timesScalarAffine",
+                opGtimesF,
                 c.getLocal("pFrom"),
                 t,
-                c.i32_const(FrN64*8),
                 c.getLocal("pTo")
             ),
-            c.call( frPrefix + "_toMontgomery", t, t),
-
-            c.setLocal("pFrom", c.i32_add(c.getLocal("pFrom"), c.i32_const(sGIn))),
-            c.setLocal("pTo", c.i32_add(c.getLocal("pTo"), c.i32_const(sGOut))),
+            c.setLocal("pFrom", c.i32_add(c.getLocal("pFrom"), c.i32_const(sizeGIn))),
+            c.setLocal("pTo", c.i32_add(c.getLocal("pTo"), c.i32_const(sizeGOut))),
 
             // t = t* inc
             c.call(
@@ -95,22 +74,7 @@ module.exports = function buildApplyKey(module, gPrefix, frPrefix) {
             c.br(0)
         ))
     );
-    f.addCode(
-        c.call(
-            gPrefix + "_batchToAffine",
-            c.getLocal("pOldFree"),
-            c.getLocal("n"),
-            c.getLocal("pOut")
-        )
-    );
 
-    // Recover Old memory
-    f.addCode(
-        c.i32_store(
-            c.i32_const(0),
-            c.getLocal("pOldFree")
-        )
-    );
-
+    module.exportFunction(fnName);
 
 };

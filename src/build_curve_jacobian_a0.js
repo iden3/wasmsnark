@@ -1069,7 +1069,7 @@ module.exports = function buildCurve(module, prefix, prefixField, pB) {
                 c.br_if(1, c.i32_eq ( c.getLocal("i"), c.getLocal("n") )),
 
                 c.if(
-                    c.call(prefix + "_isZero", c.getLocal("itAux")),
+                    c.call(prefixField + "_isZero", c.getLocal("itAux")),
                     [
                         ...c.call(prefixField + "_zero", c.getLocal("itOut")),
                         ...c.call(prefixField + "_zero", c.i32_add(c.getLocal("itOut"), c.i32_const(n8)))
