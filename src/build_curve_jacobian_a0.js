@@ -1207,10 +1207,20 @@ module.exports = function buildCurve(module, prefix, prefixField, pB) {
         const tmpY = c.i32_const(pTmp + n8);
 
         f.addCode(
-            c.call(prefix + "_fromMontgomeryAffine", c.getLocal("pIn"), tmp)
-        );
+            c.if(
+                c.call(prefix + "_isZeroAffine", c.getLocal("pIn")),
+                [
+                    ...c.call(prefix + "_zeroAffine", c.getLocal("pOut")),
+                    ...c.i32_store8(
+                        c.getLocal("pOut"),
+                        c.i32_const(0x40)
+                    ),
+                    ...c.ret([])
+                ]
+            ),
 
-        f.addCode(
+            c.call(prefix + "_fromMontgomeryAffine", c.getLocal("pIn"), tmp),
+
             c.call(prefix + "__reverseBytes", tmpX, c.i32_const(n8), c.getLocal("pOut")),
             c.call(prefix + "__reverseBytes", tmpY, c.i32_const(n8), c.i32_add(c.getLocal("pOut"), c.i32_const(n8))),
         );
@@ -1229,6 +1239,13 @@ module.exports = function buildCurve(module, prefix, prefixField, pB) {
         const tmpY = c.i32_const(pTmp + n8);
 
         f.addCode(
+            c.if(
+                c.i32_and(c.i32_load8_u(c.getLocal("pIn")), c.i32_const(0x40)),
+                [
+                    ...c.call(prefix + "_zeroAffine", c.getLocal("pOut")),
+                    ...c.ret([])
+                ]
+            ),
             c.call(prefix + "__reverseBytes", c.getLocal("pIn"), c.i32_const(n8), tmpX),
             c.call(prefix + "__reverseBytes", c.i32_add(c.getLocal("pIn"), c.i32_const(n8)), c.i32_const(n8), tmpY),
             c.call(prefix + "_toMontgomeryAffine", tmp,  c.getLocal("pOut"))

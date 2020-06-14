@@ -31,7 +31,7 @@
     "mocha": "^6.1.4",
     "package": "^1.0.1",
     "perf_hooks": "0.0.1",
-    "wasmbuilder": "0.0.10"
+    "wasmbuilder": "0.0.11"
   },
   "dependencies": {
     "big-integer": "^1.6.42",

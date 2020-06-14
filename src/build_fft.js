@@ -41,6 +41,8 @@ module.exports = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) 
 
     while ( nr.modPow(q.shiftRight(1), q).equals(1) ) nr = nr.add(1);
 
+    console.log(nr);
+
     const w = new Array(maxBits+1);
     w[maxBits] = nr.modPow(rem, q);
 
