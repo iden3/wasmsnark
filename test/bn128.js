@@ -52,7 +52,7 @@ describe("Basic tests for g1 in bn128", () => {
     }
 
     function printF1(s, p) {
-        console.log(s, " " + ns(p))
+        console.log(s, " " + ns(p));
     }
 
     function printF2(s, p) {
@@ -142,7 +142,6 @@ describe("Basic tests for g1 in bn128", () => {
     });
     it("It should timesScalar G1", async () => {
 
-        console.log(bn128.G1.g);
         const s=2;
         const pG1 = pb.bn128.pG1gen;
 
@@ -493,8 +492,6 @@ describe("Basic tests for g1 in bn128", () => {
         pb.g1m_multiexpAffine(pPoints, pScalars, n8, N, pCalculated);
 
         assert(pb.g1m_eq(pExpected, pCalculated));
-
-        console.log(bn128);
 
     });
 

@@ -1453,8 +1453,6 @@ module.exports = function buildCurve(module, prefix, prefixField, pB) {
     module.exportFunction(prefix + "_batchToAffine");
     module.exportFunction(prefix + "_batchToJacobian");
 
-    module.exportFunction(prefix + "_multiexp");
-    module.exportFunction(prefix + "_multiexpAffine");
     /*
     buildG1MulScalar(module, zq);
     module.exportFunction("g1MulScalar");
