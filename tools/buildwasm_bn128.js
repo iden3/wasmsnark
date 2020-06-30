@@ -18,11 +18,17 @@ function buildWasm() {
             exports.pr = ${moduleBuilder.modules.frm.pq};
             exports.pG1gen = ${moduleBuilder.modules.bn128.pG1gen};
             exports.pG1zero = ${moduleBuilder.modules.bn128.pG1zero};
+            exports.pG1b = ${moduleBuilder.modules.bn128.pG1b};
             exports.pG2gen = ${moduleBuilder.modules.bn128.pG2gen};
             exports.pG2zero = ${moduleBuilder.modules.bn128.pG2zero};
+            exports.pG2b = ${moduleBuilder.modules.bn128.pG2b};
             exports.pOneT = ${moduleBuilder.modules.bn128.pOneT};
             exports.prePSize = ${moduleBuilder.modules.bn128.prePSize};
             exports.preQSize = ${moduleBuilder.modules.bn128.preQSize};
+            exports.n8q = 32;
+            exports.n8r = 32;
+            exports.q = "${moduleBuilder.modules.bn128.q}";
+            exports.r = "${moduleBuilder.modules.bn128.r}";
         `
     );
 

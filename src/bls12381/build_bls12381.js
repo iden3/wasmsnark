@@ -7,8 +7,9 @@ const buildF2m =require("../build_f2m.js");
 const buildF3m =require("../build_f3m.js");
 const buildCurve =require("../build_curve_jacobian_a0.js");
 const buildFFT = require("../build_fft");
-const buildMultiexp = require("../build_multiexp");
 const buildPol = require("../build_pol");
+const buildQAP = require("../build_qap");
+const buildApplyKey = require("../build_applykey");
 
 // Definition here: https://electriccoin.co/blog/new-snark-curve/
 
@@ -35,13 +36,15 @@ module.exports = function buildBLS12381(module, _prefix) {
 
     const pr = module.alloc(utils.bigInt2BytesLE( r, frsize ));
 
-    const f1mPrefix = buildF1m(module, q, "f1m");
-    buildF1(module, r, "fr", "frm");
+    const f1mPrefix = buildF1m(module, q, "f1m", "intq");
+    buildF1(module, r, "fr", "frm", "intr");
     const pG1b = module.alloc(utils.bigInt2BytesLE( toMontgomery(bigInt(4)), f1size ));
     const g1mPrefix = buildCurve(module, "g1m", "f1m", pG1b);
-    buildMultiexp(module, "g1m", "g1m", "f1m", "fr");
-    buildFFT(module, "fft", "frm");
+
+    buildFFT(module, "frm", "frm", "frm", "frm_mul");
+
     buildPol(module, "pol", "frm");
+    buildQAP(module, "qap", "frm");
 
     const f2mPrefix = buildF2m(module, "f1m_neg", "f2m", "f1m");
     const pG2b = module.alloc([
@@ -49,7 +52,45 @@ module.exports = function buildBLS12381(module, _prefix) {
         ...utils.bigInt2BytesLE( toMontgomery(bigInt("4")), f1size )
     ]);
     const g2mPrefix = buildCurve(module, "g2m", "f2m", pG2b);
-    buildMultiexp(module, "g2m", "g2m", "f2m", "fr");
+
+
+    function buildGTimesFr(fnName, opMul) {
+        const f = module.addFunction(fnName);
+        f.addParam("pG", "i32");
+        f.addParam("pFr", "i32");
+        f.addParam("pr", "i32");
+
+        const c = f.getCodeBuilder();
+
+        const AUX = c.i32_const(module.alloc(n8r));
+
+        f.addCode(
+            c.call("frm_fromMontgomery", c.getLocal("pFr"), AUX),
+            c.call(
+                opMul,
+                c.getLocal("pG"),
+                AUX,
+                c.i32_const(n8r),
+                c.getLocal("pr")
+            )
+        );
+
+        module.exportFunction(fnName);
+    }
+    buildGTimesFr("g1m_timesFr", "g1m_timesScalar");
+    buildFFT(module, "g1m", "g1m", "frm", "g1m_timesFr");
+
+    buildGTimesFr("g2m_timesFr", "g2m_timesScalar");
+    buildFFT(module, "g2m", "g2m", "frm", "g2m_timesFr");
+
+    buildGTimesFr("g1m_timesFrAffine", "g1m_timesScalarAffine");
+    buildGTimesFr("g2m_timesFrAffine", "g2m_timesScalarAffine");
+
+    buildApplyKey(module, "frm_batchApplyKey", "fmr", "frm", n8r, n8r, n8r, "frm_mul");
+    buildApplyKey(module, "g1m_batchApplyKey", "g1m", "frm", n8q*3, n8q*3, n8r, "g1m_timesFr");
+    buildApplyKey(module, "g1m_batchApplyKeyMixed", "g1m", "frm", n8q*2, n8q*3, n8r, "g1m_timesFrAffine");
+    buildApplyKey(module, "g2m_batchApplyKey", "g2m", "frm", n8q*2*3, n8q*3*2, n8r, "g2m_timesFr");
+    buildApplyKey(module, "g2m_batchApplyKeyMixed", "g2m", "frm", n8q*2*2, n8q*3*2, n8r, "g2m_timesFrAffine");
 
 
     function toMontgomery(a) {
@@ -221,22 +262,6 @@ module.exports = function buildBLS12381(module, _prefix) {
 
     const ftmPrefix = buildF2m(module, f6mPrefix+"_mulNR", "ftm", f6mPrefix);
 
-    module.modules[prefix] = {
-        n64q: n64q,
-        n64r: n64r,
-        n8q: n8q,
-        n8r: n8r,
-        pG1gen: pG1gen,
-        pG1zero: pG1zero,
-        pG2gen: pG2gen,
-        pG2zero: pG2zero,
-        pq: module.modules["f1m"].pq,
-        pr: pr,
-        pOneT: pOneT,
-        r: r,
-        q: q
-    };
-
     const ateLoopCount = bigInt("d201000000010000", 16);
     const ateLoopBitBytes = bits(ateLoopCount);
     const pAteLoopBitBytes = module.alloc(ateLoopBitBytes);
@@ -251,6 +276,28 @@ module.exports = function buildBLS12381(module, _prefix) {
     const finalExpIsNegative = true;
 
     const finalExpZ = bigInt("15132376222941642752");
+
+
+    module.modules[prefix] = {
+        n64q: n64q,
+        n64r: n64r,
+        n8q: n8q,
+        n8r: n8r,
+        pG1gen: pG1gen,
+        pG1zero: pG1zero,
+        pG1b: pG1b,
+        pG2gen: pG2gen,
+        pG2zero: pG2zero,
+        pG2b: pG2b,
+        pq: module.modules["f1m"].pq,
+        pr: pr,
+        pOneT: pOneT,
+        r: r,
+        q: q,
+        prePSize: prePSize,
+        preQSize: preQSize
+    };
+
 
     function naf(n) {
         let E = n;

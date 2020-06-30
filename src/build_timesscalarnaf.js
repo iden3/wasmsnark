@@ -77,6 +77,13 @@ module.exports = function buildTimesScalarNAF(module, fnName, elementLen, opAB, 
     }
 
     f.addCode(
+        c.if(
+            c.i32_eqz(c.getLocal("scalarLength")),
+            [
+                ...c.call(opInit, c.getLocal("r")),
+                ...c.ret([])
+            ]
+        ),
         c.setLocal("nbits", c.i32_shl(c.getLocal("scalarLength"), c.i32_const(3))),
         c.setLocal("old0", c.i32_load(c.i32_const(0))),
         c.setLocal("p", c.getLocal("old0")),

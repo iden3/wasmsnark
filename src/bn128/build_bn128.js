@@ -248,16 +248,6 @@ module.exports = function buildBN128(module, _prefix) {
 
     const ftmPrefix = buildF2m(module, prefix+"_mulNR12", "ftm", f6mPrefix);
 
-    module.modules[prefix] = {
-        n64: n64,
-        pG1gen: pG1gen,
-        pG1zero: pG1zero,
-        pG2gen: pG2gen,
-        pG2zero: pG2zero,
-        pq: module.modules["f1m"].pq,
-        pr: pr,
-        pOneT: pOneT
-    };
 
     const ateLoopCount = bigInt("29793968203157093288");
     const ateLoopBitBytes = bits(ateLoopCount);
@@ -271,6 +261,24 @@ module.exports = function buildBN128(module, _prefix) {
     const prePSize = 3*2*n8;
     const preQSize = 3*n8*2 + ateNCoefs*ateCoefSize;
     const finalExpIsNegative = false;
+
+
+    module.modules[prefix] = {
+        n64: n64,
+        pG1gen: pG1gen,
+        pG1zero: pG1zero,
+        pG1b: pG1b,
+        pG2gen: pG2gen,
+        pG2zero: pG2zero,
+        pG2b: pG2b,
+        pq: module.modules["f1m"].pq,
+        pr: pr,
+        pOneT: pOneT,
+        prePSize: prePSize,
+        preQSize: preQSize,
+        r: r.toString(),
+        q: q.toString()
+    };
 
     // console.log("PrePSize: " +prePSize);
     // console.log("PreQSize: " +preQSize);

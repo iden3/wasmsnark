@@ -123,6 +123,31 @@ module.exports = function buildF3m(module, mulNonResidueFn, prefix, f1mPrefix) {
         );
     }
 
+    function buildIsNegative() {
+        const f = module.addFunction(prefix+"_isNegative");
+        f.addParam("x", "i32");
+        f.setReturnType("i32");
+
+        const c = f.getCodeBuilder();
+
+        const x0 = c.getLocal("x");
+        const x1 = c.i32_add(c.getLocal("x"), c.i32_const(f1n8));
+        const x2 = c.i32_add(c.getLocal("x"), c.i32_const(2*f1n8));
+
+        f.addCode(
+            c.if(
+                c.call(f1mPrefix+"_isZero", x0),
+                c.if(
+                    c.call(f1mPrefix+"_isZero", x1),
+                    c.ret(c.call(f1mPrefix+"_isNegative", x2)),
+                    c.ret(c.call(f1mPrefix+"_isNegative", x1))
+                )
+            ),
+            c.ret(c.call(f1mPrefix+"_isNegative", x0))
+        );
+    }
+
+
     function buildMul() {
         const f = module.addFunction(prefix+"_mul");
         f.addParam("x", "i32");
@@ -512,7 +537,7 @@ module.exports = function buildF3m(module, mulNonResidueFn, prefix, f1mPrefix) {
     buildEq();
     buildInverse();
     buildTimesScalar();
-
+    buildIsNegative();
 
     module.exportFunction(prefix + "_isZero");
     module.exportFunction(prefix + "_isOne");
@@ -542,6 +567,7 @@ module.exports = function buildF3m(module, mulNonResidueFn, prefix, f1mPrefix) {
     module.exportFunction(prefix + "_exp");
     module.exportFunction(prefix + "_timesScalar");
     module.exportFunction(prefix + "_batchInverse");
+    module.exportFunction(prefix + "_isNegative");
 
     return prefix;
 };

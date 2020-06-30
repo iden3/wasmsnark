@@ -31,10 +31,17 @@ module.exports = function buildTimesScalar(module, fnName, elementLen, opAB, opA
 
     const aux = c.i32_const(module.alloc(elementLen));
 
+    f.addCode(
+        c.if(
+            c.i32_eqz(c.getLocal("scalarLength")),
+            [
+                ...c.call(opInit, c.getLocal("r")),
+                ...c.ret([])
+            ]
+        )
+    );
     f.addCode(c.call(opCopy, c.getLocal("base"), aux));
-
     f.addCode(c.call(opInit, c.getLocal("r")));
-
     f.addCode(c.setLocal("i", c.getLocal("scalarLength")));
     f.addCode(c.block(c.loop(
         c.setLocal("i", c.i32_sub(c.getLocal("i"), c.i32_const(1))),
