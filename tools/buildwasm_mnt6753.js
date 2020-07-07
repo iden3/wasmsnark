@@ -18,7 +18,7 @@ function buildWasm() {
     fs.writeFileSync(
         path.join( __dirname, "..", "build", "mnt6753_wasm.js"),
         `
-            exports.code = Buffer.from("${Buffer.from(code).toString("base64")}", "base64");
+            exports.code = "${Buffer.from(code).toString("base64")}";
             exports.pq = ${moduleBuilder.modules.mnt6753.pq};
             exports.pr = ${moduleBuilder.modules.mnt6753.pq};
             exports.pG1gen = ${moduleBuilder.modules.mnt6753.pG1gen};

@@ -13,7 +13,7 @@ function buildWasm() {
     fs.writeFileSync(
         path.join( __dirname, "..", "build", "bn128_wasm.js"),
         `
-            exports.code = Buffer.from("${Buffer.from(code).toString("base64")}", "base64");
+            exports.code = "${Buffer.from(code).toString("base64")}";
             exports.pq = ${moduleBuilder.modules.f1m.pq};
             exports.pr = ${moduleBuilder.modules.frm.pq};
             exports.pG1gen = ${moduleBuilder.modules.bn128.pG1gen};

@@ -70,6 +70,8 @@ module.exports = function buildBN128(module, _prefix) {
                 c.getLocal("pr")
             )
         );
+
+        module.exportFunction(fnName);
     }
     buildGTimesFr("g1m_timesFr", "g1m_timesScalar");
     buildFFT(module, "g1m", "g1m", "frm", "g1m_timesFr");
