@@ -64,7 +64,7 @@ Here is a simple example of a web page that loads a key and a witness and genera
 <script>
 
 var witness;
-var proving_key;
+var provingKey;
 
 function onLoad() {
 
