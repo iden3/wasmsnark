@@ -27,7 +27,7 @@
   "devDependencies": {
     "browserify": "^16.5.0",
     "eslint": "^6.8.0",
-    "mocha": "^6.1.4",
+    "mocha": "^10.2.0",
     "package": "^1.0.1",
     "wasmbuilder": "0.0.10"
   },
