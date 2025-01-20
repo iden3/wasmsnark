@@ -32,7 +32,7 @@
     "wasmbuilder": "0.0.10"
   },
   "dependencies": {
-    "big-integer": "^1.6.42",
-    "blakejs": "^1.1.0"
+    "@noble/hashes": "^1.7.1",
+    "big-integer": "^1.6.42"
   }
 }

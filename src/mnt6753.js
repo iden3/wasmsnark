@@ -21,7 +21,7 @@
 const bigInt = require("big-integer");
 const mnt6753_wasm = require("../build/mnt6753_wasm.js");
 const assert = require("assert");
-const blakejs = require("blakejs");
+const { blake2s } = require('@noble/hashes/blake2s')
 const utils = require("./utils");
 
 function bits(n) {
@@ -698,7 +698,7 @@ class Mnt6753 {
 
 //        console.log("Pedersen: " + this.getInt(pPedersenResult).toString());
 
-        const blakeResult = blakejs.blake2s(this.i8.subarray(pPedersenResult, pPedersenResult + 95));
+        const blakeResult = blake2s(this.i8.subarray(pPedersenResult, pPedersenResult + 95));
 
         this.instance.exports.f1m_zero(pBlakeResult);
         this.i8.set(blakeResult, pBlakeResult);
@@ -763,7 +763,7 @@ class Mnt6753 {
 
         const res8 = new Uint8Array(res.slice(0,95));
 
-        const blakeResult = blakejs.blake2s(res8);
+        const blakeResult = blake2s(res8);
 
         this.instance.exports.f1m_zero(pBlakeResult);
         this.i8.set(blakeResult, pBlakeResult);
