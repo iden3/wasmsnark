@@ -5645,9 +5645,9 @@ class Bn128 {
             this.putBin(ps, rnd);
         } else {
             const br = NodeCrypto.randomBytes(32);
-            this.putBin(pr, br);
+            this.putBin(pr, new Uint8Array(br.buffer));
             const bs = NodeCrypto.randomBytes(32);
-            this.putBin(ps, bs);
+            this.putBin(ps, new Uint8Array(bs.buffer));
         }
 
 /// Uncoment it to debug and check it works
