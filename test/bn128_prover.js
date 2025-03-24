@@ -62,6 +62,13 @@ describe("Basic tests for bn128 proof generator", () => {
         const signals = fs.readFileSync(path.join(__dirname, "data", "witness.bin"));
         const provingKey = fs.readFileSync(path.join(__dirname, "data", "proving_key.bin"));
         const proofS = await bn128.groth16GenProof(copyBuff(signals), copyBuff(provingKey));
+        function verifyHammingWeight(num) {
+            const bits = BigInt(bn128.bin2int(bn128.getBin(num, 32))).toString(2);
+            const zeros = bits.split('').filter(b => b === '0').length;
+            if (zeros < 96 || zeros > 160) throw new Error('invalid hamming weight of r / s');
+        }
+        verifyHammingWeight(bn128._pr);
+        verifyHammingWeight(bn128._ps);
 
         const verifierKey = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "verification_key.json"), "utf8"));
 

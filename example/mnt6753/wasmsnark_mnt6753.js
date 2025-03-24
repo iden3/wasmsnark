@@ -6360,7 +6360,7 @@ class Mnt6753 {
             this.putBin(pr, rnd);
         } else {
             br = NodeCrypto.randomBytes(16);
-            this.putBin(pr, br);
+            this.putBin(pr, new Uint8Array(br.buffer));
         }
 
 
@@ -6525,7 +6525,7 @@ class Mnt6753 {
             this.putBin(pr, rnd);
         } else {
             br = NodeCrypto.randomBytes(16);
-            this.putBin(pr, br);
+            this.putBin(pr, new Uint8Array(br.buffer));
         }
 
 

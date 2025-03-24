@@ -655,10 +655,13 @@ class Bn128 {
             this.putBin(ps, rnd);
         } else {
             const br = NodeCrypto.randomBytes(32);
-            this.putBin(pr, br);
+            this.putBin(pr, new Uint32Array(br.buffer));
             const bs = NodeCrypto.randomBytes(32);
-            this.putBin(ps, bs);
+            this.putBin(ps, new Uint32Array(bs.buffer));
         }
+        // For tests
+        this._pr = pr;
+        this._ps = ps;
 
 /// Uncoment it to debug and check it works
 //        this.instance.exports.f1m_zero(pr);
