@@ -659,6 +659,9 @@ class Bn128 {
             const bs = NodeCrypto.randomBytes(32);
             this.putBin(ps, new Uint32Array(bs.buffer));
         }
+        // For tests
+        this._pr = pr;
+        this._ps = ps;
 
 /// Uncoment it to debug and check it works
 //        this.instance.exports.f1m_zero(pr);
