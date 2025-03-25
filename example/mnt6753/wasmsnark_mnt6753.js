@@ -13,7 +13,7 @@
             exports.preQSize = 616896;
         
 }).call(this,require("buffer").Buffer)
-},{"buffer":13}],2:[function(require,module,exports){
+},{"buffer":15}],2:[function(require,module,exports){
 /*
     Copyright 2019 0KIMS association.
 
@@ -77,7 +77,662 @@ buildMnt6753().then( (mnt6753) => {
 
 
 
-},{"./src/mnt6753.js":17}],3:[function(require,module,exports){
+},{"./src/mnt6753.js":19}],3:[function(require,module,exports){
+"use strict";
+/**
+ * Internal assertion helpers.
+ * @module
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.anumber = anumber;
+exports.abytes = abytes;
+exports.ahash = ahash;
+exports.aexists = aexists;
+exports.aoutput = aoutput;
+/** Asserts something is positive integer. */
+function anumber(n) {
+    if (!Number.isSafeInteger(n) || n < 0)
+        throw new Error('positive integer expected, got ' + n);
+}
+/** Is number an Uint8Array? Copied from utils for perf. */
+function isBytes(a) {
+    return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
+}
+/** Asserts something is Uint8Array. */
+function abytes(b, ...lengths) {
+    if (!isBytes(b))
+        throw new Error('Uint8Array expected');
+    if (lengths.length > 0 && !lengths.includes(b.length))
+        throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length);
+}
+/** Asserts something is hash */
+function ahash(h) {
+    if (typeof h !== 'function' || typeof h.create !== 'function')
+        throw new Error('Hash should be wrapped by utils.wrapConstructor');
+    anumber(h.outputLen);
+    anumber(h.blockLen);
+}
+/** Asserts a hash instance has not been destroyed / finished */
+function aexists(instance, checkFinished = true) {
+    if (instance.destroyed)
+        throw new Error('Hash instance has been destroyed');
+    if (checkFinished && instance.finished)
+        throw new Error('Hash#digest() has already been called');
+}
+/** Asserts output is properly-sized byte array */
+function aoutput(out, instance) {
+    abytes(out);
+    const min = instance.outputLen;
+    if (out.length < min) {
+        throw new Error('digestInto() expects output buffer of length at least ' + min);
+    }
+}
+
+},{}],4:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BLAKE = exports.SIGMA = void 0;
+/**
+ * Internal helpers for blake hash.
+ * @module
+ */
+const _assert_js_1 = require("./_assert.js");
+const utils_js_1 = require("./utils.js");
+/**
+ * Internal blake variable.
+ * For BLAKE2b, the two extra permutations for rounds 10 and 11 are SIGMA[10..11] = SIGMA[0..1].
+ */
+// prettier-ignore
+exports.SIGMA = new Uint8Array([
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
+    11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
+    7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
+    9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
+    2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
+    12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11,
+    13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10,
+    6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5,
+    10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
+    // Blake1, unused in others
+    11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
+    7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
+    9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
+    2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
+]);
+/** Class, from which others are subclassed. */
+class BLAKE extends utils_js_1.Hash {
+    constructor(blockLen, outputLen, opts = {}, keyLen, saltLen, persLen) {
+        super();
+        this.blockLen = blockLen;
+        this.outputLen = outputLen;
+        this.length = 0;
+        this.pos = 0;
+        this.finished = false;
+        this.destroyed = false;
+        (0, _assert_js_1.anumber)(blockLen);
+        (0, _assert_js_1.anumber)(outputLen);
+        (0, _assert_js_1.anumber)(keyLen);
+        if (outputLen < 0 || outputLen > keyLen)
+            throw new Error('outputLen bigger than keyLen');
+        if (opts.key !== undefined && (opts.key.length < 1 || opts.key.length > keyLen))
+            throw new Error('key length must be undefined or 1..' + keyLen);
+        if (opts.salt !== undefined && opts.salt.length !== saltLen)
+            throw new Error('salt must be undefined or ' + saltLen);
+        if (opts.personalization !== undefined && opts.personalization.length !== persLen)
+            throw new Error('personalization must be undefined or ' + persLen);
+        this.buffer = new Uint8Array(blockLen);
+        this.buffer32 = (0, utils_js_1.u32)(this.buffer);
+    }
+    update(data) {
+        (0, _assert_js_1.aexists)(this);
+        // Main difference with other hashes: there is flag for last block,
+        // so we cannot process current block before we know that there
+        // is the next one. This significantly complicates logic and reduces ability
+        // to do zero-copy processing
+        const { blockLen, buffer, buffer32 } = this;
+        data = (0, utils_js_1.toBytes)(data);
+        const len = data.length;
+        const offset = data.byteOffset;
+        const buf = data.buffer;
+        for (let pos = 0; pos < len;) {
+            // If buffer is full and we still have input (don't process last block, same as blake2s)
+            if (this.pos === blockLen) {
+                if (!utils_js_1.isLE)
+                    (0, utils_js_1.byteSwap32)(buffer32);
+                this.compress(buffer32, 0, false);
+                if (!utils_js_1.isLE)
+                    (0, utils_js_1.byteSwap32)(buffer32);
+                this.pos = 0;
+            }
+            const take = Math.min(blockLen - this.pos, len - pos);
+            const dataOffset = offset + pos;
+            // full block && aligned to 4 bytes && not last in input
+            if (take === blockLen && !(dataOffset % 4) && pos + take < len) {
+                const data32 = new Uint32Array(buf, dataOffset, Math.floor((len - pos) / 4));
+                if (!utils_js_1.isLE)
+                    (0, utils_js_1.byteSwap32)(data32);
+                for (let pos32 = 0; pos + blockLen < len; pos32 += buffer32.length, pos += blockLen) {
+                    this.length += blockLen;
+                    this.compress(data32, pos32, false);
+                }
+                if (!utils_js_1.isLE)
+                    (0, utils_js_1.byteSwap32)(data32);
+                continue;
+            }
+            buffer.set(data.subarray(pos, pos + take), this.pos);
+            this.pos += take;
+            this.length += take;
+            pos += take;
+        }
+        return this;
+    }
+    digestInto(out) {
+        (0, _assert_js_1.aexists)(this);
+        (0, _assert_js_1.aoutput)(out, this);
+        const { pos, buffer32 } = this;
+        this.finished = true;
+        // Padding
+        this.buffer.subarray(pos).fill(0);
+        if (!utils_js_1.isLE)
+            (0, utils_js_1.byteSwap32)(buffer32);
+        this.compress(buffer32, 0, true);
+        if (!utils_js_1.isLE)
+            (0, utils_js_1.byteSwap32)(buffer32);
+        const out32 = (0, utils_js_1.u32)(out);
+        this.get().forEach((v, i) => (out32[i] = (0, utils_js_1.byteSwapIfBE)(v)));
+    }
+    digest() {
+        const { buffer, outputLen } = this;
+        this.digestInto(buffer);
+        const res = buffer.slice(0, outputLen);
+        this.destroy();
+        return res;
+    }
+    _cloneInto(to) {
+        const { buffer, length, finished, destroyed, outputLen, pos } = this;
+        to || (to = new this.constructor({ dkLen: outputLen }));
+        to.set(...this.get());
+        to.length = length;
+        to.finished = finished;
+        to.destroyed = destroyed;
+        to.outputLen = outputLen;
+        to.buffer.set(buffer);
+        to.pos = pos;
+        return to;
+    }
+}
+exports.BLAKE = BLAKE;
+
+},{"./_assert.js":3,"./utils.js":8}],5:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.add5L = exports.add5H = exports.add4H = exports.add4L = exports.add3H = exports.add3L = exports.rotlBL = exports.rotlBH = exports.rotlSL = exports.rotlSH = exports.rotr32L = exports.rotr32H = exports.rotrBL = exports.rotrBH = exports.rotrSL = exports.rotrSH = exports.shrSL = exports.shrSH = exports.toBig = void 0;
+exports.fromBig = fromBig;
+exports.split = split;
+exports.add = add;
+/**
+ * Internal helpers for u64. BigUint64Array is too slow as per 2025, so we implement it using Uint32Array.
+ * @todo re-check https://issues.chromium.org/issues/42212588
+ * @module
+ */
+const U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
+const _32n = /* @__PURE__ */ BigInt(32);
+function fromBig(n, le = false) {
+    if (le)
+        return { h: Number(n & U32_MASK64), l: Number((n >> _32n) & U32_MASK64) };
+    return { h: Number((n >> _32n) & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 };
+}
+function split(lst, le = false) {
+    let Ah = new Uint32Array(lst.length);
+    let Al = new Uint32Array(lst.length);
+    for (let i = 0; i < lst.length; i++) {
+        const { h, l } = fromBig(lst[i], le);
+        [Ah[i], Al[i]] = [h, l];
+    }
+    return [Ah, Al];
+}
+const toBig = (h, l) => (BigInt(h >>> 0) << _32n) | BigInt(l >>> 0);
+exports.toBig = toBig;
+// for Shift in [0, 32)
+const shrSH = (h, _l, s) => h >>> s;
+exports.shrSH = shrSH;
+const shrSL = (h, l, s) => (h << (32 - s)) | (l >>> s);
+exports.shrSL = shrSL;
+// Right rotate for Shift in [1, 32)
+const rotrSH = (h, l, s) => (h >>> s) | (l << (32 - s));
+exports.rotrSH = rotrSH;
+const rotrSL = (h, l, s) => (h << (32 - s)) | (l >>> s);
+exports.rotrSL = rotrSL;
+// Right rotate for Shift in (32, 64), NOTE: 32 is special case.
+const rotrBH = (h, l, s) => (h << (64 - s)) | (l >>> (s - 32));
+exports.rotrBH = rotrBH;
+const rotrBL = (h, l, s) => (h >>> (s - 32)) | (l << (64 - s));
+exports.rotrBL = rotrBL;
+// Right rotate for shift===32 (just swaps l&h)
+const rotr32H = (_h, l) => l;
+exports.rotr32H = rotr32H;
+const rotr32L = (h, _l) => h;
+exports.rotr32L = rotr32L;
+// Left rotate for Shift in [1, 32)
+const rotlSH = (h, l, s) => (h << s) | (l >>> (32 - s));
+exports.rotlSH = rotlSH;
+const rotlSL = (h, l, s) => (l << s) | (h >>> (32 - s));
+exports.rotlSL = rotlSL;
+// Left rotate for Shift in (32, 64), NOTE: 32 is special case.
+const rotlBH = (h, l, s) => (l << (s - 32)) | (h >>> (64 - s));
+exports.rotlBH = rotlBH;
+const rotlBL = (h, l, s) => (h << (s - 32)) | (l >>> (64 - s));
+exports.rotlBL = rotlBL;
+// JS uses 32-bit signed integers for bitwise operations which means we cannot
+// simple take carry out of low bit sum by shift, we need to use division.
+function add(Ah, Al, Bh, Bl) {
+    const l = (Al >>> 0) + (Bl >>> 0);
+    return { h: (Ah + Bh + ((l / 2 ** 32) | 0)) | 0, l: l | 0 };
+}
+// Addition with more than 2 elements
+const add3L = (Al, Bl, Cl) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0);
+exports.add3L = add3L;
+const add3H = (low, Ah, Bh, Ch) => (Ah + Bh + Ch + ((low / 2 ** 32) | 0)) | 0;
+exports.add3H = add3H;
+const add4L = (Al, Bl, Cl, Dl) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0);
+exports.add4L = add4L;
+const add4H = (low, Ah, Bh, Ch, Dh) => (Ah + Bh + Ch + Dh + ((low / 2 ** 32) | 0)) | 0;
+exports.add4H = add4H;
+const add5L = (Al, Bl, Cl, Dl, El) => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0);
+exports.add5L = add5L;
+const add5H = (low, Ah, Bh, Ch, Dh, Eh) => (Ah + Bh + Ch + Dh + Eh + ((low / 2 ** 32) | 0)) | 0;
+exports.add5H = add5H;
+// prettier-ignore
+const u64 = {
+    fromBig, split, toBig,
+    shrSH, shrSL,
+    rotrSH, rotrSL, rotrBH, rotrBL,
+    rotr32H, rotr32L,
+    rotlSH, rotlSL, rotlBH, rotlBL,
+    add, add3L, add3H, add4L, add4H, add5H, add5L,
+};
+exports.default = u64;
+
+},{}],6:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.blake2s = exports.BLAKE2s = exports.B2S_IV = void 0;
+exports.G1s = G1s;
+exports.G2s = G2s;
+exports.compress = compress;
+/**
+ * Blake2s hash function. Focuses on 8-bit to 32-bit platforms. blake2b for 64-bit, but in JS it is slower.
+ * @module
+ */
+const _blake_js_1 = require("./_blake.js");
+const _u64_js_1 = require("./_u64.js");
+const utils_js_1 = require("./utils.js");
+/**
+ * Initial state: same as SHA256. First 32 bits of the fractional parts of the square roots
+ * of the first 8 primes 2..19.
+ */
+// prettier-ignore
+exports.B2S_IV = new Uint32Array([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+]);
+// Mixing function G splitted in two halfs
+function G1s(a, b, c, d, x) {
+    a = (a + b + x) | 0;
+    d = (0, utils_js_1.rotr)(d ^ a, 16);
+    c = (c + d) | 0;
+    b = (0, utils_js_1.rotr)(b ^ c, 12);
+    return { a, b, c, d };
+}
+function G2s(a, b, c, d, x) {
+    a = (a + b + x) | 0;
+    d = (0, utils_js_1.rotr)(d ^ a, 8);
+    c = (c + d) | 0;
+    b = (0, utils_js_1.rotr)(b ^ c, 7);
+    return { a, b, c, d };
+}
+// prettier-ignore
+function compress(s, offset, msg, rounds, v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15) {
+    let j = 0;
+    for (let i = 0; i < rounds; i++) {
+        ({ a: v0, b: v4, c: v8, d: v12 } = G1s(v0, v4, v8, v12, msg[offset + s[j++]]));
+        ({ a: v0, b: v4, c: v8, d: v12 } = G2s(v0, v4, v8, v12, msg[offset + s[j++]]));
+        ({ a: v1, b: v5, c: v9, d: v13 } = G1s(v1, v5, v9, v13, msg[offset + s[j++]]));
+        ({ a: v1, b: v5, c: v9, d: v13 } = G2s(v1, v5, v9, v13, msg[offset + s[j++]]));
+        ({ a: v2, b: v6, c: v10, d: v14 } = G1s(v2, v6, v10, v14, msg[offset + s[j++]]));
+        ({ a: v2, b: v6, c: v10, d: v14 } = G2s(v2, v6, v10, v14, msg[offset + s[j++]]));
+        ({ a: v3, b: v7, c: v11, d: v15 } = G1s(v3, v7, v11, v15, msg[offset + s[j++]]));
+        ({ a: v3, b: v7, c: v11, d: v15 } = G2s(v3, v7, v11, v15, msg[offset + s[j++]]));
+        ({ a: v0, b: v5, c: v10, d: v15 } = G1s(v0, v5, v10, v15, msg[offset + s[j++]]));
+        ({ a: v0, b: v5, c: v10, d: v15 } = G2s(v0, v5, v10, v15, msg[offset + s[j++]]));
+        ({ a: v1, b: v6, c: v11, d: v12 } = G1s(v1, v6, v11, v12, msg[offset + s[j++]]));
+        ({ a: v1, b: v6, c: v11, d: v12 } = G2s(v1, v6, v11, v12, msg[offset + s[j++]]));
+        ({ a: v2, b: v7, c: v8, d: v13 } = G1s(v2, v7, v8, v13, msg[offset + s[j++]]));
+        ({ a: v2, b: v7, c: v8, d: v13 } = G2s(v2, v7, v8, v13, msg[offset + s[j++]]));
+        ({ a: v3, b: v4, c: v9, d: v14 } = G1s(v3, v4, v9, v14, msg[offset + s[j++]]));
+        ({ a: v3, b: v4, c: v9, d: v14 } = G2s(v3, v4, v9, v14, msg[offset + s[j++]]));
+    }
+    return { v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 };
+}
+class BLAKE2s extends _blake_js_1.BLAKE {
+    constructor(opts = {}) {
+        super(64, opts.dkLen === undefined ? 32 : opts.dkLen, opts, 32, 8, 8);
+        // Internal state, same as SHA-256
+        this.v0 = exports.B2S_IV[0] | 0;
+        this.v1 = exports.B2S_IV[1] | 0;
+        this.v2 = exports.B2S_IV[2] | 0;
+        this.v3 = exports.B2S_IV[3] | 0;
+        this.v4 = exports.B2S_IV[4] | 0;
+        this.v5 = exports.B2S_IV[5] | 0;
+        this.v6 = exports.B2S_IV[6] | 0;
+        this.v7 = exports.B2S_IV[7] | 0;
+        const keyLength = opts.key ? opts.key.length : 0;
+        this.v0 ^= this.outputLen | (keyLength << 8) | (0x01 << 16) | (0x01 << 24);
+        if (opts.salt) {
+            const salt = (0, utils_js_1.u32)((0, utils_js_1.toBytes)(opts.salt));
+            this.v4 ^= (0, utils_js_1.byteSwapIfBE)(salt[0]);
+            this.v5 ^= (0, utils_js_1.byteSwapIfBE)(salt[1]);
+        }
+        if (opts.personalization) {
+            const pers = (0, utils_js_1.u32)((0, utils_js_1.toBytes)(opts.personalization));
+            this.v6 ^= (0, utils_js_1.byteSwapIfBE)(pers[0]);
+            this.v7 ^= (0, utils_js_1.byteSwapIfBE)(pers[1]);
+        }
+        if (opts.key) {
+            // Pad to blockLen and update
+            const tmp = new Uint8Array(this.blockLen);
+            tmp.set((0, utils_js_1.toBytes)(opts.key));
+            this.update(tmp);
+        }
+    }
+    get() {
+        const { v0, v1, v2, v3, v4, v5, v6, v7 } = this;
+        return [v0, v1, v2, v3, v4, v5, v6, v7];
+    }
+    // prettier-ignore
+    set(v0, v1, v2, v3, v4, v5, v6, v7) {
+        this.v0 = v0 | 0;
+        this.v1 = v1 | 0;
+        this.v2 = v2 | 0;
+        this.v3 = v3 | 0;
+        this.v4 = v4 | 0;
+        this.v5 = v5 | 0;
+        this.v6 = v6 | 0;
+        this.v7 = v7 | 0;
+    }
+    compress(msg, offset, isLast) {
+        const { h, l } = (0, _u64_js_1.fromBig)(BigInt(this.length));
+        // prettier-ignore
+        const { v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15 } = compress(_blake_js_1.SIGMA, offset, msg, 10, this.v0, this.v1, this.v2, this.v3, this.v4, this.v5, this.v6, this.v7, exports.B2S_IV[0], exports.B2S_IV[1], exports.B2S_IV[2], exports.B2S_IV[3], l ^ exports.B2S_IV[4], h ^ exports.B2S_IV[5], isLast ? ~exports.B2S_IV[6] : exports.B2S_IV[6], exports.B2S_IV[7]);
+        this.v0 ^= v0 ^ v8;
+        this.v1 ^= v1 ^ v9;
+        this.v2 ^= v2 ^ v10;
+        this.v3 ^= v3 ^ v11;
+        this.v4 ^= v4 ^ v12;
+        this.v5 ^= v5 ^ v13;
+        this.v6 ^= v6 ^ v14;
+        this.v7 ^= v7 ^ v15;
+    }
+    destroy() {
+        this.destroyed = true;
+        this.buffer32.fill(0);
+        this.set(0, 0, 0, 0, 0, 0, 0, 0);
+    }
+}
+exports.BLAKE2s = BLAKE2s;
+/**
+ * Blake2s hash function. Focuses on 8-bit to 32-bit platforms. blake2b for 64-bit, but in JS it is slower.
+ * @param msg - message that would be hashed
+ * @param opts - dkLen output length, key for MAC mode, salt, personalization
+ */
+exports.blake2s = (0, utils_js_1.wrapConstructorWithOpts)((opts) => new BLAKE2s(opts));
+
+},{"./_blake.js":4,"./_u64.js":5,"./utils.js":8}],7:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.crypto = void 0;
+exports.crypto = typeof globalThis === 'object' && 'crypto' in globalThis ? globalThis.crypto : undefined;
+
+},{}],8:[function(require,module,exports){
+"use strict";
+/**
+ * Utilities for hex, bytes, CSPRNG.
+ * @module
+ */
+/*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Hash = exports.nextTick = exports.byteSwapIfBE = exports.isLE = void 0;
+exports.isBytes = isBytes;
+exports.u8 = u8;
+exports.u32 = u32;
+exports.createView = createView;
+exports.rotr = rotr;
+exports.rotl = rotl;
+exports.byteSwap = byteSwap;
+exports.byteSwap32 = byteSwap32;
+exports.bytesToHex = bytesToHex;
+exports.hexToBytes = hexToBytes;
+exports.asyncLoop = asyncLoop;
+exports.utf8ToBytes = utf8ToBytes;
+exports.toBytes = toBytes;
+exports.concatBytes = concatBytes;
+exports.checkOpts = checkOpts;
+exports.wrapConstructor = wrapConstructor;
+exports.wrapConstructorWithOpts = wrapConstructorWithOpts;
+exports.wrapXOFConstructorWithOpts = wrapXOFConstructorWithOpts;
+exports.randomBytes = randomBytes;
+// We use WebCrypto aka globalThis.crypto, which exists in browsers and node.js 16+.
+// node.js versions earlier than v19 don't declare it in global scope.
+// For node.js, package.json#exports field mapping rewrites import
+// from `crypto` to `cryptoNode`, which imports native module.
+// Makes the utils un-importable in browsers without a bundler.
+// Once node.js 18 is deprecated (2025-04-30), we can just drop the import.
+const crypto_1 = require("@noble/hashes/crypto");
+const _assert_js_1 = require("./_assert.js");
+// export { isBytes } from './_assert.js';
+// We can't reuse isBytes from _assert, because somehow this causes huge perf issues
+function isBytes(a) {
+    return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
+}
+// Cast array to different type
+function u8(arr) {
+    return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+}
+function u32(arr) {
+    return new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
+}
+// Cast array to view
+function createView(arr) {
+    return new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
+}
+/** The rotate right (circular right shift) operation for uint32 */
+function rotr(word, shift) {
+    return (word << (32 - shift)) | (word >>> shift);
+}
+/** The rotate left (circular left shift) operation for uint32 */
+function rotl(word, shift) {
+    return (word << shift) | ((word >>> (32 - shift)) >>> 0);
+}
+/** Is current platform little-endian? Most are. Big-Endian platform: IBM */
+exports.isLE = (() => new Uint8Array(new Uint32Array([0x11223344]).buffer)[0] === 0x44)();
+// The byte swap operation for uint32
+function byteSwap(word) {
+    return (((word << 24) & 0xff000000) |
+        ((word << 8) & 0xff0000) |
+        ((word >>> 8) & 0xff00) |
+        ((word >>> 24) & 0xff));
+}
+/** Conditionally byte swap if on a big-endian platform */
+exports.byteSwapIfBE = exports.isLE
+    ? (n) => n
+    : (n) => byteSwap(n);
+/** In place byte swap for Uint32Array */
+function byteSwap32(arr) {
+    for (let i = 0; i < arr.length; i++) {
+        arr[i] = byteSwap(arr[i]);
+    }
+}
+// Array where index 0xf0 (240) is mapped to string 'f0'
+const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
+/**
+ * Convert byte array to hex string.
+ * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
+ */
+function bytesToHex(bytes) {
+    (0, _assert_js_1.abytes)(bytes);
+    // pre-caching improves the speed 6x
+    let hex = '';
+    for (let i = 0; i < bytes.length; i++) {
+        hex += hexes[bytes[i]];
+    }
+    return hex;
+}
+// We use optimized technique to convert hex string to byte array
+const asciis = { _0: 48, _9: 57, A: 65, F: 70, a: 97, f: 102 };
+function asciiToBase16(ch) {
+    if (ch >= asciis._0 && ch <= asciis._9)
+        return ch - asciis._0; // '2' => 50-48
+    if (ch >= asciis.A && ch <= asciis.F)
+        return ch - (asciis.A - 10); // 'B' => 66-(65-10)
+    if (ch >= asciis.a && ch <= asciis.f)
+        return ch - (asciis.a - 10); // 'b' => 98-(97-10)
+    return;
+}
+/**
+ * Convert hex string to byte array.
+ * @example hexToBytes('cafe0123') // Uint8Array.from([0xca, 0xfe, 0x01, 0x23])
+ */
+function hexToBytes(hex) {
+    if (typeof hex !== 'string')
+        throw new Error('hex string expected, got ' + typeof hex);
+    const hl = hex.length;
+    const al = hl / 2;
+    if (hl % 2)
+        throw new Error('hex string expected, got unpadded hex of length ' + hl);
+    const array = new Uint8Array(al);
+    for (let ai = 0, hi = 0; ai < al; ai++, hi += 2) {
+        const n1 = asciiToBase16(hex.charCodeAt(hi));
+        const n2 = asciiToBase16(hex.charCodeAt(hi + 1));
+        if (n1 === undefined || n2 === undefined) {
+            const char = hex[hi] + hex[hi + 1];
+            throw new Error('hex string expected, got non-hex character "' + char + '" at index ' + hi);
+        }
+        array[ai] = n1 * 16 + n2; // multiply first octet, e.g. 'a3' => 10*16+3 => 160 + 3 => 163
+    }
+    return array;
+}
+/**
+ * There is no setImmediate in browser and setTimeout is slow.
+ * Call of async fn will return Promise, which will be fullfiled only on
+ * next scheduler queue processing step and this is exactly what we need.
+ */
+const nextTick = async () => { };
+exports.nextTick = nextTick;
+/** Returns control to thread each 'tick' ms to avoid blocking. */
+async function asyncLoop(iters, tick, cb) {
+    let ts = Date.now();
+    for (let i = 0; i < iters; i++) {
+        cb(i);
+        // Date.now() is not monotonic, so in case if clock goes backwards we return return control too
+        const diff = Date.now() - ts;
+        if (diff >= 0 && diff < tick)
+            continue;
+        await (0, exports.nextTick)();
+        ts += diff;
+    }
+}
+/**
+ * Convert JS string to byte array.
+ * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+ */
+function utf8ToBytes(str) {
+    if (typeof str !== 'string')
+        throw new Error('utf8ToBytes expected string, got ' + typeof str);
+    return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
+}
+/**
+ * Normalizes (non-hex) string or Uint8Array to Uint8Array.
+ * Warning: when Uint8Array is passed, it would NOT get copied.
+ * Keep in mind for future mutable operations.
+ */
+function toBytes(data) {
+    if (typeof data === 'string')
+        data = utf8ToBytes(data);
+    (0, _assert_js_1.abytes)(data);
+    return data;
+}
+/**
+ * Copies several Uint8Arrays into one.
+ */
+function concatBytes(...arrays) {
+    let sum = 0;
+    for (let i = 0; i < arrays.length; i++) {
+        const a = arrays[i];
+        (0, _assert_js_1.abytes)(a);
+        sum += a.length;
+    }
+    const res = new Uint8Array(sum);
+    for (let i = 0, pad = 0; i < arrays.length; i++) {
+        const a = arrays[i];
+        res.set(a, pad);
+        pad += a.length;
+    }
+    return res;
+}
+/** For runtime check if class implements interface */
+class Hash {
+    // Safe version that clones internal state
+    clone() {
+        return this._cloneInto();
+    }
+}
+exports.Hash = Hash;
+function checkOpts(defaults, opts) {
+    if (opts !== undefined && {}.toString.call(opts) !== '[object Object]')
+        throw new Error('Options should be object or undefined');
+    const merged = Object.assign(defaults, opts);
+    return merged;
+}
+/** Wraps hash function, creating an interface on top of it */
+function wrapConstructor(hashCons) {
+    const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
+    const tmp = hashCons();
+    hashC.outputLen = tmp.outputLen;
+    hashC.blockLen = tmp.blockLen;
+    hashC.create = () => hashCons();
+    return hashC;
+}
+function wrapConstructorWithOpts(hashCons) {
+    const hashC = (msg, opts) => hashCons(opts).update(toBytes(msg)).digest();
+    const tmp = hashCons({});
+    hashC.outputLen = tmp.outputLen;
+    hashC.blockLen = tmp.blockLen;
+    hashC.create = (opts) => hashCons(opts);
+    return hashC;
+}
+function wrapXOFConstructorWithOpts(hashCons) {
+    const hashC = (msg, opts) => hashCons(opts).update(toBytes(msg)).digest();
+    const tmp = hashCons({});
+    hashC.outputLen = tmp.outputLen;
+    hashC.blockLen = tmp.blockLen;
+    hashC.create = (opts) => hashCons(opts);
+    return hashC;
+}
+/** Cryptographically secure PRNG. Uses internal OS-level `crypto.getRandomValues`. */
+function randomBytes(bytesLength = 32) {
+    if (crypto_1.crypto && typeof crypto_1.crypto.getRandomValues === 'function') {
+        return crypto_1.crypto.getRandomValues(new Uint8Array(bytesLength));
+    }
+    // Legacy Node.js compatibility
+    if (crypto_1.crypto && typeof crypto_1.crypto.randomBytes === 'function') {
+        return crypto_1.crypto.randomBytes(bytesLength);
+    }
+    throw new Error('crypto.getRandomValues must be defined');
+}
+
+},{"./_assert.js":3,"@noble/hashes/crypto":7}],9:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -587,7 +1242,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"object-assign":15,"util/":6}],4:[function(require,module,exports){
+},{"object-assign":17,"util/":12}],10:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -612,14 +1267,14 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],5:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],6:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -1209,7 +1864,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":5,"_process":16,"inherits":4}],7:[function(require,module,exports){
+},{"./support/isBuffer":11,"_process":18,"inherits":10}],13:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -1363,7 +2018,7 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],8:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 var bigInt = (function (undefined) {
     "use strict";
 
@@ -2818,576 +3473,7 @@ if (typeof define === "function" && define.amd) {
     });
 }
 
-},{}],9:[function(require,module,exports){
-// Blake2B in pure Javascript
-// Adapted from the reference implementation in RFC7693
-// Ported to Javascript by DC - https://github.com/dcposch
-
-var util = require('./util')
-
-// 64-bit unsigned addition
-// Sets v[a,a+1] += v[b,b+1]
-// v should be a Uint32Array
-function ADD64AA (v, a, b) {
-  var o0 = v[a] + v[b]
-  var o1 = v[a + 1] + v[b + 1]
-  if (o0 >= 0x100000000) {
-    o1++
-  }
-  v[a] = o0
-  v[a + 1] = o1
-}
-
-// 64-bit unsigned addition
-// Sets v[a,a+1] += b
-// b0 is the low 32 bits of b, b1 represents the high 32 bits
-function ADD64AC (v, a, b0, b1) {
-  var o0 = v[a] + b0
-  if (b0 < 0) {
-    o0 += 0x100000000
-  }
-  var o1 = v[a + 1] + b1
-  if (o0 >= 0x100000000) {
-    o1++
-  }
-  v[a] = o0
-  v[a + 1] = o1
-}
-
-// Little-endian byte access
-function B2B_GET32 (arr, i) {
-  return (arr[i] ^
-  (arr[i + 1] << 8) ^
-  (arr[i + 2] << 16) ^
-  (arr[i + 3] << 24))
-}
-
-// G Mixing function
-// The ROTRs are inlined for speed
-function B2B_G (a, b, c, d, ix, iy) {
-  var x0 = m[ix]
-  var x1 = m[ix + 1]
-  var y0 = m[iy]
-  var y1 = m[iy + 1]
-
-  ADD64AA(v, a, b) // v[a,a+1] += v[b,b+1] ... in JS we must store a uint64 as two uint32s
-  ADD64AC(v, a, x0, x1) // v[a, a+1] += x ... x0 is the low 32 bits of x, x1 is the high 32 bits
-
-  // v[d,d+1] = (v[d,d+1] xor v[a,a+1]) rotated to the right by 32 bits
-  var xor0 = v[d] ^ v[a]
-  var xor1 = v[d + 1] ^ v[a + 1]
-  v[d] = xor1
-  v[d + 1] = xor0
-
-  ADD64AA(v, c, d)
-
-  // v[b,b+1] = (v[b,b+1] xor v[c,c+1]) rotated right by 24 bits
-  xor0 = v[b] ^ v[c]
-  xor1 = v[b + 1] ^ v[c + 1]
-  v[b] = (xor0 >>> 24) ^ (xor1 << 8)
-  v[b + 1] = (xor1 >>> 24) ^ (xor0 << 8)
-
-  ADD64AA(v, a, b)
-  ADD64AC(v, a, y0, y1)
-
-  // v[d,d+1] = (v[d,d+1] xor v[a,a+1]) rotated right by 16 bits
-  xor0 = v[d] ^ v[a]
-  xor1 = v[d + 1] ^ v[a + 1]
-  v[d] = (xor0 >>> 16) ^ (xor1 << 16)
-  v[d + 1] = (xor1 >>> 16) ^ (xor0 << 16)
-
-  ADD64AA(v, c, d)
-
-  // v[b,b+1] = (v[b,b+1] xor v[c,c+1]) rotated right by 63 bits
-  xor0 = v[b] ^ v[c]
-  xor1 = v[b + 1] ^ v[c + 1]
-  v[b] = (xor1 >>> 31) ^ (xor0 << 1)
-  v[b + 1] = (xor0 >>> 31) ^ (xor1 << 1)
-}
-
-// Initialization Vector
-var BLAKE2B_IV32 = new Uint32Array([
-  0xF3BCC908, 0x6A09E667, 0x84CAA73B, 0xBB67AE85,
-  0xFE94F82B, 0x3C6EF372, 0x5F1D36F1, 0xA54FF53A,
-  0xADE682D1, 0x510E527F, 0x2B3E6C1F, 0x9B05688C,
-  0xFB41BD6B, 0x1F83D9AB, 0x137E2179, 0x5BE0CD19
-])
-
-var SIGMA8 = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-  14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
-  11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
-  7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
-  9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
-  2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
-  12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11,
-  13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10,
-  6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5,
-  10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0,
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-  14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3
-]
-
-// These are offsets into a uint64 buffer.
-// Multiply them all by 2 to make them offsets into a uint32 buffer,
-// because this is Javascript and we don't have uint64s
-var SIGMA82 = new Uint8Array(SIGMA8.map(function (x) { return x * 2 }))
-
-// Compression function. 'last' flag indicates last block.
-// Note we're representing 16 uint64s as 32 uint32s
-var v = new Uint32Array(32)
-var m = new Uint32Array(32)
-function blake2bCompress (ctx, last) {
-  var i = 0
-
-  // init work variables
-  for (i = 0; i < 16; i++) {
-    v[i] = ctx.h[i]
-    v[i + 16] = BLAKE2B_IV32[i]
-  }
-
-  // low 64 bits of offset
-  v[24] = v[24] ^ ctx.t
-  v[25] = v[25] ^ (ctx.t / 0x100000000)
-  // high 64 bits not supported, offset may not be higher than 2**53-1
-
-  // last block flag set ?
-  if (last) {
-    v[28] = ~v[28]
-    v[29] = ~v[29]
-  }
-
-  // get little-endian words
-  for (i = 0; i < 32; i++) {
-    m[i] = B2B_GET32(ctx.b, 4 * i)
-  }
-
-  // twelve rounds of mixing
-  // uncomment the DebugPrint calls to log the computation
-  // and match the RFC sample documentation
-  // util.debugPrint('          m[16]', m, 64)
-  for (i = 0; i < 12; i++) {
-    // util.debugPrint('   (i=' + (i < 10 ? ' ' : '') + i + ') v[16]', v, 64)
-    B2B_G(0, 8, 16, 24, SIGMA82[i * 16 + 0], SIGMA82[i * 16 + 1])
-    B2B_G(2, 10, 18, 26, SIGMA82[i * 16 + 2], SIGMA82[i * 16 + 3])
-    B2B_G(4, 12, 20, 28, SIGMA82[i * 16 + 4], SIGMA82[i * 16 + 5])
-    B2B_G(6, 14, 22, 30, SIGMA82[i * 16 + 6], SIGMA82[i * 16 + 7])
-    B2B_G(0, 10, 20, 30, SIGMA82[i * 16 + 8], SIGMA82[i * 16 + 9])
-    B2B_G(2, 12, 22, 24, SIGMA82[i * 16 + 10], SIGMA82[i * 16 + 11])
-    B2B_G(4, 14, 16, 26, SIGMA82[i * 16 + 12], SIGMA82[i * 16 + 13])
-    B2B_G(6, 8, 18, 28, SIGMA82[i * 16 + 14], SIGMA82[i * 16 + 15])
-  }
-  // util.debugPrint('   (i=12) v[16]', v, 64)
-
-  for (i = 0; i < 16; i++) {
-    ctx.h[i] = ctx.h[i] ^ v[i] ^ v[i + 16]
-  }
-  // util.debugPrint('h[8]', ctx.h, 64)
-}
-
-// Creates a BLAKE2b hashing context
-// Requires an output length between 1 and 64 bytes
-// Takes an optional Uint8Array key
-function blake2bInit (outlen, key) {
-  if (outlen === 0 || outlen > 64) {
-    throw new Error('Illegal output length, expected 0 < length <= 64')
-  }
-  if (key && key.length > 64) {
-    throw new Error('Illegal key, expected Uint8Array with 0 < length <= 64')
-  }
-
-  // state, 'param block'
-  var ctx = {
-    b: new Uint8Array(128),
-    h: new Uint32Array(16),
-    t: 0, // input count
-    c: 0, // pointer within buffer
-    outlen: outlen // output length in bytes
-  }
-
-  // initialize hash state
-  for (var i = 0; i < 16; i++) {
-    ctx.h[i] = BLAKE2B_IV32[i]
-  }
-  var keylen = key ? key.length : 0
-  ctx.h[0] ^= 0x01010000 ^ (keylen << 8) ^ outlen
-
-  // key the hash, if applicable
-  if (key) {
-    blake2bUpdate(ctx, key)
-    // at the end
-    ctx.c = 128
-  }
-
-  return ctx
-}
-
-// Updates a BLAKE2b streaming hash
-// Requires hash context and Uint8Array (byte array)
-function blake2bUpdate (ctx, input) {
-  for (var i = 0; i < input.length; i++) {
-    if (ctx.c === 128) { // buffer full ?
-      ctx.t += ctx.c // add counters
-      blake2bCompress(ctx, false) // compress (not last)
-      ctx.c = 0 // counter to zero
-    }
-    ctx.b[ctx.c++] = input[i]
-  }
-}
-
-// Completes a BLAKE2b streaming hash
-// Returns a Uint8Array containing the message digest
-function blake2bFinal (ctx) {
-  ctx.t += ctx.c // mark last block offset
-
-  while (ctx.c < 128) { // fill up with zeros
-    ctx.b[ctx.c++] = 0
-  }
-  blake2bCompress(ctx, true) // final block flag = 1
-
-  // little endian convert and store
-  var out = new Uint8Array(ctx.outlen)
-  for (var i = 0; i < ctx.outlen; i++) {
-    out[i] = ctx.h[i >> 2] >> (8 * (i & 3))
-  }
-  return out
-}
-
-// Computes the BLAKE2B hash of a string or byte array, and returns a Uint8Array
-//
-// Returns a n-byte Uint8Array
-//
-// Parameters:
-// - input - the input bytes, as a string, Buffer or Uint8Array
-// - key - optional key Uint8Array, up to 64 bytes
-// - outlen - optional output length in bytes, default 64
-function blake2b (input, key, outlen) {
-  // preprocess inputs
-  outlen = outlen || 64
-  input = util.normalizeInput(input)
-
-  // do the math
-  var ctx = blake2bInit(outlen, key)
-  blake2bUpdate(ctx, input)
-  return blake2bFinal(ctx)
-}
-
-// Computes the BLAKE2B hash of a string or byte array
-//
-// Returns an n-byte hash in hex, all lowercase
-//
-// Parameters:
-// - input - the input bytes, as a string, Buffer, or Uint8Array
-// - key - optional key Uint8Array, up to 64 bytes
-// - outlen - optional output length in bytes, default 64
-function blake2bHex (input, key, outlen) {
-  var output = blake2b(input, key, outlen)
-  return util.toHex(output)
-}
-
-module.exports = {
-  blake2b: blake2b,
-  blake2bHex: blake2bHex,
-  blake2bInit: blake2bInit,
-  blake2bUpdate: blake2bUpdate,
-  blake2bFinal: blake2bFinal
-}
-
-},{"./util":12}],10:[function(require,module,exports){
-// BLAKE2s hash function in pure Javascript
-// Adapted from the reference implementation in RFC7693
-// Ported to Javascript by DC - https://github.com/dcposch
-
-var util = require('./util')
-
-// Little-endian byte access.
-// Expects a Uint8Array and an index
-// Returns the little-endian uint32 at v[i..i+3]
-function B2S_GET32 (v, i) {
-  return v[i] ^ (v[i + 1] << 8) ^ (v[i + 2] << 16) ^ (v[i + 3] << 24)
-}
-
-// Mixing function G.
-function B2S_G (a, b, c, d, x, y) {
-  v[a] = v[a] + v[b] + x
-  v[d] = ROTR32(v[d] ^ v[a], 16)
-  v[c] = v[c] + v[d]
-  v[b] = ROTR32(v[b] ^ v[c], 12)
-  v[a] = v[a] + v[b] + y
-  v[d] = ROTR32(v[d] ^ v[a], 8)
-  v[c] = v[c] + v[d]
-  v[b] = ROTR32(v[b] ^ v[c], 7)
-}
-
-// 32-bit right rotation
-// x should be a uint32
-// y must be between 1 and 31, inclusive
-function ROTR32 (x, y) {
-  return (x >>> y) ^ (x << (32 - y))
-}
-
-// Initialization Vector.
-var BLAKE2S_IV = new Uint32Array([
-  0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
-  0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19])
-
-var SIGMA = new Uint8Array([
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-  14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3,
-  11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4,
-  7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8,
-  9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13,
-  2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9,
-  12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11,
-  13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10,
-  6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5,
-  10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0])
-
-// Compression function. "last" flag indicates last block
-var v = new Uint32Array(16)
-var m = new Uint32Array(16)
-function blake2sCompress (ctx, last) {
-  var i = 0
-  for (i = 0; i < 8; i++) { // init work variables
-    v[i] = ctx.h[i]
-    v[i + 8] = BLAKE2S_IV[i]
-  }
-
-  v[12] ^= ctx.t // low 32 bits of offset
-  v[13] ^= (ctx.t / 0x100000000) // high 32 bits
-  if (last) { // last block flag set ?
-    v[14] = ~v[14]
-  }
-
-  for (i = 0; i < 16; i++) { // get little-endian words
-    m[i] = B2S_GET32(ctx.b, 4 * i)
-  }
-
-  // ten rounds of mixing
-  // uncomment the DebugPrint calls to log the computation
-  // and match the RFC sample documentation
-  // util.debugPrint('          m[16]', m, 32)
-  for (i = 0; i < 10; i++) {
-    // util.debugPrint('   (i=' + i + ')  v[16]', v, 32)
-    B2S_G(0, 4, 8, 12, m[SIGMA[i * 16 + 0]], m[SIGMA[i * 16 + 1]])
-    B2S_G(1, 5, 9, 13, m[SIGMA[i * 16 + 2]], m[SIGMA[i * 16 + 3]])
-    B2S_G(2, 6, 10, 14, m[SIGMA[i * 16 + 4]], m[SIGMA[i * 16 + 5]])
-    B2S_G(3, 7, 11, 15, m[SIGMA[i * 16 + 6]], m[SIGMA[i * 16 + 7]])
-    B2S_G(0, 5, 10, 15, m[SIGMA[i * 16 + 8]], m[SIGMA[i * 16 + 9]])
-    B2S_G(1, 6, 11, 12, m[SIGMA[i * 16 + 10]], m[SIGMA[i * 16 + 11]])
-    B2S_G(2, 7, 8, 13, m[SIGMA[i * 16 + 12]], m[SIGMA[i * 16 + 13]])
-    B2S_G(3, 4, 9, 14, m[SIGMA[i * 16 + 14]], m[SIGMA[i * 16 + 15]])
-  }
-  // util.debugPrint('   (i=10) v[16]', v, 32)
-
-  for (i = 0; i < 8; i++) {
-    ctx.h[i] ^= v[i] ^ v[i + 8]
-  }
-  // util.debugPrint('h[8]', ctx.h, 32)
-}
-
-// Creates a BLAKE2s hashing context
-// Requires an output length between 1 and 32 bytes
-// Takes an optional Uint8Array key
-function blake2sInit (outlen, key) {
-  if (!(outlen > 0 && outlen <= 32)) {
-    throw new Error('Incorrect output length, should be in [1, 32]')
-  }
-  var keylen = key ? key.length : 0
-  if (key && !(keylen > 0 && keylen <= 32)) {
-    throw new Error('Incorrect key length, should be in [1, 32]')
-  }
-
-  var ctx = {
-    h: new Uint32Array(BLAKE2S_IV), // hash state
-    b: new Uint32Array(64), // input block
-    c: 0, // pointer within block
-    t: 0, // input count
-    outlen: outlen // output length in bytes
-  }
-  ctx.h[0] ^= 0x01010000 ^ (keylen << 8) ^ outlen
-
-  if (keylen > 0) {
-    blake2sUpdate(ctx, key)
-    ctx.c = 64 // at the end
-  }
-
-  return ctx
-}
-
-// Updates a BLAKE2s streaming hash
-// Requires hash context and Uint8Array (byte array)
-function blake2sUpdate (ctx, input) {
-  for (var i = 0; i < input.length; i++) {
-    if (ctx.c === 64) { // buffer full ?
-      ctx.t += ctx.c // add counters
-      blake2sCompress(ctx, false) // compress (not last)
-      ctx.c = 0 // counter to zero
-    }
-    ctx.b[ctx.c++] = input[i]
-  }
-}
-
-// Completes a BLAKE2s streaming hash
-// Returns a Uint8Array containing the message digest
-function blake2sFinal (ctx) {
-  ctx.t += ctx.c // mark last block offset
-  while (ctx.c < 64) { // fill up with zeros
-    ctx.b[ctx.c++] = 0
-  }
-  blake2sCompress(ctx, true) // final block flag = 1
-
-  // little endian convert and store
-  var out = new Uint8Array(ctx.outlen)
-  for (var i = 0; i < ctx.outlen; i++) {
-    out[i] = (ctx.h[i >> 2] >> (8 * (i & 3))) & 0xFF
-  }
-  return out
-}
-
-// Computes the BLAKE2S hash of a string or byte array, and returns a Uint8Array
-//
-// Returns a n-byte Uint8Array
-//
-// Parameters:
-// - input - the input bytes, as a string, Buffer, or Uint8Array
-// - key - optional key Uint8Array, up to 32 bytes
-// - outlen - optional output length in bytes, default 64
-function blake2s (input, key, outlen) {
-  // preprocess inputs
-  outlen = outlen || 32
-  input = util.normalizeInput(input)
-
-  // do the math
-  var ctx = blake2sInit(outlen, key)
-  blake2sUpdate(ctx, input)
-  return blake2sFinal(ctx)
-}
-
-// Computes the BLAKE2S hash of a string or byte array
-//
-// Returns an n-byte hash in hex, all lowercase
-//
-// Parameters:
-// - input - the input bytes, as a string, Buffer, or Uint8Array
-// - key - optional key Uint8Array, up to 32 bytes
-// - outlen - optional output length in bytes, default 64
-function blake2sHex (input, key, outlen) {
-  var output = blake2s(input, key, outlen)
-  return util.toHex(output)
-}
-
-module.exports = {
-  blake2s: blake2s,
-  blake2sHex: blake2sHex,
-  blake2sInit: blake2sInit,
-  blake2sUpdate: blake2sUpdate,
-  blake2sFinal: blake2sFinal
-}
-
-},{"./util":12}],11:[function(require,module,exports){
-var b2b = require('./blake2b')
-var b2s = require('./blake2s')
-
-module.exports = {
-  blake2b: b2b.blake2b,
-  blake2bHex: b2b.blake2bHex,
-  blake2bInit: b2b.blake2bInit,
-  blake2bUpdate: b2b.blake2bUpdate,
-  blake2bFinal: b2b.blake2bFinal,
-  blake2s: b2s.blake2s,
-  blake2sHex: b2s.blake2sHex,
-  blake2sInit: b2s.blake2sInit,
-  blake2sUpdate: b2s.blake2sUpdate,
-  blake2sFinal: b2s.blake2sFinal
-}
-
-},{"./blake2b":9,"./blake2s":10}],12:[function(require,module,exports){
-(function (Buffer){
-var ERROR_MSG_INPUT = 'Input must be an string, Buffer or Uint8Array'
-
-// For convenience, let people hash a string, not just a Uint8Array
-function normalizeInput (input) {
-  var ret
-  if (input instanceof Uint8Array) {
-    ret = input
-  } else if (input instanceof Buffer) {
-    ret = new Uint8Array(input)
-  } else if (typeof (input) === 'string') {
-    ret = new Uint8Array(Buffer.from(input, 'utf8'))
-  } else {
-    throw new Error(ERROR_MSG_INPUT)
-  }
-  return ret
-}
-
-// Converts a Uint8Array to a hexadecimal string
-// For example, toHex([255, 0, 255]) returns "ff00ff"
-function toHex (bytes) {
-  return Array.prototype.map.call(bytes, function (n) {
-    return (n < 16 ? '0' : '') + n.toString(16)
-  }).join('')
-}
-
-// Converts any value in [0...2^32-1] to an 8-character hex string
-function uint32ToHex (val) {
-  return (0x100000000 + val).toString(16).substring(1)
-}
-
-// For debugging: prints out hash state in the same format as the RFC
-// sample computation exactly, so that you can diff
-function debugPrint (label, arr, size) {
-  var msg = '\n' + label + ' = '
-  for (var i = 0; i < arr.length; i += 2) {
-    if (size === 32) {
-      msg += uint32ToHex(arr[i]).toUpperCase()
-      msg += ' '
-      msg += uint32ToHex(arr[i + 1]).toUpperCase()
-    } else if (size === 64) {
-      msg += uint32ToHex(arr[i + 1]).toUpperCase()
-      msg += uint32ToHex(arr[i]).toUpperCase()
-    } else throw new Error('Invalid size ' + size)
-    if (i % 6 === 4) {
-      msg += '\n' + new Array(label.length + 4).join(' ')
-    } else if (i < arr.length - 2) {
-      msg += ' '
-    }
-  }
-  console.log(msg)
-}
-
-// For performance testing: generates N bytes of input, hashes M times
-// Measures and prints MB/second hash performance each time
-function testSpeed (hashFn, N, M) {
-  var startMs = new Date().getTime()
-
-  var input = new Uint8Array(N)
-  for (var i = 0; i < N; i++) {
-    input[i] = i % 256
-  }
-  var genMs = new Date().getTime()
-  console.log('Generated random input in ' + (genMs - startMs) + 'ms')
-  startMs = genMs
-
-  for (i = 0; i < M; i++) {
-    var hashHex = hashFn(input)
-    var hashMs = new Date().getTime()
-    var ms = hashMs - startMs
-    startMs = hashMs
-    console.log('Hashed in ' + ms + 'ms: ' + hashHex.substring(0, 20) + '...')
-    console.log(Math.round(N / (1 << 20) / (ms / 1000) * 100) / 100 + ' MB PER SECOND')
-  }
-}
-
-module.exports = {
-  normalizeInput: normalizeInput,
-  toHex: toHex,
-  debugPrint: debugPrint,
-  testSpeed: testSpeed
-}
-
-}).call(this,require("buffer").Buffer)
-},{"buffer":13}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (Buffer){
 /*!
  * The buffer module from node.js, for the browser.
@@ -5196,7 +5282,7 @@ var hexSliceLookupTable = (function () {
 })()
 
 }).call(this,require("buffer").Buffer)
-},{"base64-js":7,"buffer":13,"ieee754":14}],14:[function(require,module,exports){
+},{"base64-js":13,"buffer":15,"ieee754":16}],16:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -5282,7 +5368,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -5374,7 +5460,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -5560,7 +5646,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (process){
 /*
     Copyright 2019 0KIMS association.
@@ -5585,7 +5671,7 @@ process.umask = function() { return 0; };
 const bigInt = require("big-integer");
 const mnt6753_wasm = require("../build/mnt6753_wasm.js");
 const assert = require("assert");
-const blakejs = require("blakejs");
+const { blake2s } = require('@noble/hashes/blake2s')
 const utils = require("./utils");
 
 function bits(n) {
@@ -6262,7 +6348,7 @@ class Mnt6753 {
 
 //        console.log("Pedersen: " + this.getInt(pPedersenResult).toString());
 
-        const blakeResult = blakejs.blake2s(this.i8.subarray(pPedersenResult, pPedersenResult + 95));
+        const blakeResult = blake2s(this.i8.subarray(pPedersenResult, pPedersenResult + 95));
 
         this.instance.exports.f1m_zero(pBlakeResult);
         this.i8.set(blakeResult, pBlakeResult);
@@ -6327,7 +6413,7 @@ class Mnt6753 {
 
         const res8 = new Uint8Array(res.slice(0,95));
 
-        const blakeResult = blakejs.blake2s(res8);
+        const blakeResult = blake2s(res8);
 
         this.instance.exports.f1m_zero(pBlakeResult);
         this.i8.set(blakeResult, pBlakeResult);
@@ -6655,7 +6741,7 @@ class Mnt6753 {
 module.exports = build;
 
 }).call(this,require('_process'))
-},{"../build/mnt6753_wasm.js":1,"./utils":18,"_process":16,"assert":3,"big-integer":8,"blakejs":11,"crypto":undefined,"worker_threads":undefined}],18:[function(require,module,exports){
+},{"../build/mnt6753_wasm.js":1,"./utils":20,"@noble/hashes/blake2s":6,"_process":18,"assert":9,"big-integer":14,"crypto":undefined,"worker_threads":undefined}],20:[function(require,module,exports){
 /*
     Copyright 2019 0KIMS association.
 
@@ -6708,4 +6794,4 @@ exports.isOcamNum = function(a) {
 
 
 
-},{"big-integer":8}]},{},[2]);
+},{"big-integer":14}]},{},[2]);
