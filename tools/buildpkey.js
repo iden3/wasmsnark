@@ -1,35 +1,5 @@
-const {unstringifyBigInts} = require("./stringifybigint.js");
-const fs = require("fs");
 const bigInt = require("big-integer");
 const assert = require("assert");
-
-const version = require("../package").version;
-
-const argv = require("yargs")
-    .version(version)
-    .usage(`node buildpkey.js -i "proving_key.json" -o "proving_key.bin"
-  Default: circuit.json
-        `)
-    .alias("i", "input")
-    .alias("o", "output")
-    .help("h")
-    .alias("h", "help")
-    .epilogue(`Copyright (C) 2018  0kims association
-    This program comes with ABSOLUTELY NO WARRANTY;
-    This is free software, and you are welcome to redistribute it
-    under certain conditions; see the COPYING file in the official
-    repo directory at  https://github.com/iden3/circom `)
-    .argv;
-
-const inputName = (argv.input) ? argv.input : "proving_key.json";
-const outputName = (argv.output) ? argv.output : "proving_key.bin";
-
-
-const provingKey = unstringifyBigInts(JSON.parse(fs.readFileSync(inputName, "utf8")));
-
-
-
-
 
 function writeUint32(h, val) {
     h.dataView.setUint32(h.offset, val, true);
@@ -117,73 +87,75 @@ function calculateBuffLen(provingKey) {
 }
 
 
-const buffLen = calculateBuffLen(provingKey);
+function buildPKey(provingKey) {
+    const buffLen = calculateBuffLen(provingKey);
 
-const buff = new ArrayBuffer(buffLen);
+    const buff = new ArrayBuffer(buffLen);
 
-const h = {
-    dataView: new DataView(buff),
-    offset: 0
-};
+    const h = {
+        dataView: new DataView(buff),
+        offset: 0
+    };
 
 
-writeUint32(h, provingKey.nVars);
-writeUint32(h, provingKey.nPublic);
-writeUint32(h, provingKey.domainSize);
-const pPolsA = alloc(h, 4);
-const pPolsB = alloc(h, 4);
-const pPointsA = alloc(h, 4);
-const pPointsB1 = alloc(h, 4);
-const pPointsB2 = alloc(h, 4);
-const pPointsC = alloc(h, 4);
-const pPointsHExps = alloc(h, 4);
+    writeUint32(h, provingKey.nVars);
+    writeUint32(h, provingKey.nPublic);
+    writeUint32(h, provingKey.domainSize);
+    const pPolsA = alloc(h, 4);
+    const pPolsB = alloc(h, 4);
+    const pPointsA = alloc(h, 4);
+    const pPointsB1 = alloc(h, 4);
+    const pPointsB2 = alloc(h, 4);
+    const pPointsC = alloc(h, 4);
+    const pPointsHExps = alloc(h, 4);
 
-writePoint(h, provingKey.vk_alfa_1);
-writePoint(h, provingKey.vk_beta_1);
-writePoint(h, provingKey.vk_delta_1);
-writePoint2(h, provingKey.vk_beta_2);
-writePoint2(h, provingKey.vk_delta_2);
+    writePoint(h, provingKey.vk_alfa_1);
+    writePoint(h, provingKey.vk_beta_1);
+    writePoint(h, provingKey.vk_delta_1);
+    writePoint2(h, provingKey.vk_beta_2);
+    writePoint2(h, provingKey.vk_delta_2);
 
-writeUint32ToPointer(h, pPolsA, h.offset);
-for (let i=0; i<provingKey.nVars; i++) {
-    writeTransformedPolynomial(h, provingKey.polsA[i]);
+    writeUint32ToPointer(h, pPolsA, h.offset);
+    for (let i=0; i<provingKey.nVars; i++) {
+        writeTransformedPolynomial(h, provingKey.polsA[i]);
+    }
+
+    writeUint32ToPointer(h, pPolsB, h.offset);
+    for (let i=0; i<provingKey.nVars; i++) {
+        writeTransformedPolynomial(h, provingKey.polsB[i]);
+    }
+
+    writeUint32ToPointer(h, pPointsA, h.offset);
+    for (let i=0; i<provingKey.nVars; i++) {
+        writePoint(h, provingKey.A[i]);
+    }
+
+    writeUint32ToPointer(h, pPointsB1, h.offset);
+    for (let i=0; i<provingKey.nVars; i++) {
+        writePoint(h, provingKey.B1[i]);
+    }
+
+    writeUint32ToPointer(h, pPointsB2, h.offset);
+    for (let i=0; i<provingKey.nVars; i++) {
+        writePoint2(h, provingKey.B2[i]);
+    }
+
+    writeUint32ToPointer(h, pPointsC, h.offset);
+    for (let i=provingKey.nPublic+1; i<provingKey.nVars; i++) {
+        writePoint(h, provingKey.C[i]);
+    }
+
+    writeUint32ToPointer(h, pPointsHExps, h.offset);
+    for (let i=0; i<provingKey.domainSize; i++) {
+        writePoint(h, provingKey.hExps[i]);
+    }
+
+    assert.equal(h.offset, buffLen);
+
+    return Buffer.from(buff);
 }
 
-writeUint32ToPointer(h, pPolsB, h.offset);
-for (let i=0; i<provingKey.nVars; i++) {
-    writeTransformedPolynomial(h, provingKey.polsB[i]);
-}
-
-writeUint32ToPointer(h, pPointsA, h.offset);
-for (let i=0; i<provingKey.nVars; i++) {
-    writePoint(h, provingKey.A[i]);
-}
-
-writeUint32ToPointer(h, pPointsB1, h.offset);
-for (let i=0; i<provingKey.nVars; i++) {
-    writePoint(h, provingKey.B1[i]);
-}
-
-writeUint32ToPointer(h, pPointsB2, h.offset);
-for (let i=0; i<provingKey.nVars; i++) {
-    writePoint2(h, provingKey.B2[i]);
-}
-
-writeUint32ToPointer(h, pPointsC, h.offset);
-for (let i=provingKey.nPublic+1; i<provingKey.nVars; i++) {
-    writePoint(h, provingKey.C[i]);
-}
-
-writeUint32ToPointer(h, pPointsHExps, h.offset);
-for (let i=0; i<provingKey.domainSize; i++) {
-    writePoint(h, provingKey.hExps[i]);
-}
-
-assert.equal(h.offset, buffLen);
-
-var wstream = fs.createWriteStream(outputName);
-wstream.write(Buffer.from(buff));
-wstream.end();
+module.exports = buildPKey;
 
 /*
 NSignals
